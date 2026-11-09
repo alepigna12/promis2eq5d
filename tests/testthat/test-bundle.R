@@ -131,7 +131,7 @@ test_that("non-converged or failing point and fold fits stop the bundle", {
                "fold 2 fit did not converge")
 })
 test_that("the shipped methods resolve through the registry", {
-  for (id in c("R06_mvop_dim", "R09_chain", "D03_clad")) expect_identical(.p2e_method(id)$id, id)
+  for (id in c("R06_mvop_dim", "R09_chain", "D03_clad", "D12_klapproth")) expect_identical(.p2e_method(id)$id, id)
 })
 
 test_that("fit_info$converged = FALSE (no top-level converged) is honoured everywhere", {
