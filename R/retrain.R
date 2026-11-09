@@ -58,9 +58,13 @@
   dir <- file.path(.cache_dir(), "retrain")
   file <- file.path(dir, paste0(m$id, "_", set, "_", vs$code, "_", digest, ".rds"))
 
-  if (isTRUE(cache) && file.exists(file)) {
+  # reading is not writing: an existing valid file is used unless cache = FALSE
+  if (!isFALSE(cache) && file.exists(file)) {
     cached <- tryCatch(readRDS(file), error = function(e) NULL)
-    if (inherits(cached, "p2e_bundle")) return(cached)
+    if (inherits(cached, "p2e_bundle")) {
+      message("Using cached refit ", file)
+      return(cached)
+    }
     warning("the cached file '", file, "' is not a readable promis2eq5d fit bundle; ",
             "it will be refitted", call. = FALSE)
   }

@@ -46,7 +46,10 @@ test_that("a cached retrain is read back without refitting", {
   msgs <- testthat::capture_messages(
     .retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE))
   expect_true(any(grepl("point fit", msgs)))
-  expect_no_message(r2 <- .retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE))
+  msgs2 <- testthat::capture_messages(
+    r2 <- .retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE))
+  expect_true(any(grepl("Using cached refit", msgs2)))
+  expect_false(any(grepl("point fit", msgs2)))
   expect_s3_class(r2, "p2e_bundle")
   # a mean-only bundle has a different key and is not reused for draws
   suppressMessages(.retrain_bundle("D03", "S1", vs, boot = 1, mode = "mean", cache = TRUE))
@@ -142,4 +145,40 @@ test_that("T-score retrain replaces the input T_* columns from the table", {
   m <- .p2e_method("D12")
   expect_equal(m$point(z$point, nd), m$point(a$point, nd))
   expect_false(isTRUE(all.equal(m$point(a$point, nd), m$point(a$point, transform(nd, T_PF = 0, T_FAT = 0)))))
+})
+
+test_that("predict_eq5d reuses a saved refit without refitting", {
+  cdir <- withr::local_tempdir()
+  withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
+  stand_in_bundle("D03_clad", "S1", "UK")
+  suppressMessages(.retrain_bundle("D03", "S1", p2e_value_set("USA"), mode = "mean", cache = TRUE))
+  expect_length(list.files(file.path(cdir, "retrain"), pattern = "[.]rds$"), 1)
+  nd <- user_frame(make_synthetic_data(4, 2))
+  msgs <- testthat::capture_messages(
+    r <- predict_eq5d(nd, "USA", method = "D03", set = "S1", retrain = TRUE))
+  expect_true(any(grepl("Using cached refit", msgs)))
+  expect_false(any(grepl("point fit", msgs)))
+  expect_length(r$utility, 4)
+  expect_length(list.files(file.path(cdir, "retrain"), pattern = "[.]rds$"), 1)
+})
+
+test_that("T-score-only user data retrain a T-score set with a made-up table", {
+  withr::local_options(promis2eq5d.training_data = retrain_data(),
+                       promis2eq5d.cache_dir = withr::local_tempdir())
+  stand_in_bundle("D12_klapproth", "S3K", "UK")
+  doms <- c("PF", "ANX", "DEP", "FAT", "SLP", "SR", "PI")
+  tb <- do.call(rbind, lapply(seq_along(doms), function(i)
+    data.frame(domain = doms[i], raw = 0:40, tscore = 10 * i + (0:40) / 2)))
+  nd <- make_synthetic_data(5, 2)[c(TSCORES, "AGE", "female")]
+  names(nd)[names(nd) == "AGE"] <- "age"
+  msgs <- testthat::capture_messages(
+    r <- predict_eq5d(nd, "USA", method = "D12", retrain = TRUE, tscore_table = tb))
+  expect_true(any(grepl("point fit", msgs)))
+  expect_equal(attr(r, "p2e_info")$set, "S3K")
+  expect_true(attr(r, "p2e_info")$retrain)
+  expect_length(r$utility, 5); expect_false(anyNA(r$utility))
+  # without the T-score columns the table cannot score incomplete items
+  expect_error(suppressMessages(predict_eq5d(nd[c("age", "female")], "USA", method = "D12",
+                                             retrain = TRUE, tscore_table = tb)),
+               "neither all 28 items nor all T-score")
 })
