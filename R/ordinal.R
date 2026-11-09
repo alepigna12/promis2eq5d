@@ -2,7 +2,7 @@
 
 # Ordered-response helpers shared by the ordered-probit response models (R06).
 
-#' @importFrom stats rnorm pnorm qnorm dnorm plogis dlogis optim optimize sd setNames
+#' @importFrom stats rnorm pnorm qnorm dnorm plogis dlogis optim optimize reformulate sd setNames
 NULL
 
 # Does the predictor set use the PROMIS items (S1, S2) or the T-scores?

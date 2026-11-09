@@ -46,6 +46,5 @@ test_that("R06 keyed simulation with key = seq_len(n) uses the pipeline's normal
 test_that("a saved R06 bundle does not drag the training data along", {
   b <- stand_in_bundle("R06_mvop_dim", "S3")
   f <- tempfile(fileext = ".rds"); saveRDS(b, f); on.exit(unlink(f))
-  message("R06 stand-in bundle size: ", file.size(f), " bytes")
   expect_lt(file.size(f), 5e6)
 })

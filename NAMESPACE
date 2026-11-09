@@ -17,6 +17,7 @@ importFrom(stats,
   plogis,
   pnorm,
   qnorm,
+  reformulate,
   rnorm,
   sd,
   setNames

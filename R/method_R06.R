@@ -1,7 +1,7 @@
 # Ported from iHEA_2027 R/functions/models/R06_mvop_dim.R at freeze-ihea2027-abstract-v3 (a79e102); changes: constructor .method_R06() instead of register_mvop_response(); fit() adds $set and $variant; simulate() takes a key; mean_utility() takes a p2e_vs value set; profile_prob not ported
 
 # R06: multivariate ordered probit with a different predictor set for each
-# dimension (spec §5.2, R6): R05 with the conceptual columns of each
+# dimension (spec sec. 5.2, R6): R05 with the conceptual columns of each
 # dimension (CONCEPTUAL_SUBSETS, item or T-score version, plus the set's
 # covariates), as R02's conceptual variant. One variant, conceptual, in
 # every set. Estimation, predictions and the mean: mvop.R. The fit holds no

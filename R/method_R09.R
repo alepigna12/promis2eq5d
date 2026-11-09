@@ -1,7 +1,7 @@
 # Ported from iHEA_2027 R/functions/models/R09_chain.R at freeze-ihea2027-abstract-v3 (a79e102); changes: constructor .method_R09() instead of register_method(); ML_THREADS replaced by the literal nthread = 1; ml_configs and the variant search not ported (variants[[1]] is a stand-in, Plan 2 supplies the selected variant); .r09_state_probs, .r09_profile_prob and R09_CHUNK not ported (R09_EXACT_MEAN = FALSE is in constants.R); fit() adds $set and $variant; each booster is stored as xgboost's portable raw model (ubj) and rebuilt for prediction (.r09_boosters), so a saved fit loads across xgboost versions and holds no external pointer; simulate() takes a key (K units, uniforms matrix(runif(K * M), K, M)[key, ]; key = seq_len(n) consumes the RNG as the pipeline); mean_utility() takes a p2e_vs value set and runs under withr::with_seed(MC_SEED) with pinned RNG kinds; marginals() added (level frequencies of the same N_MC_MEAN profiles); mean_utility() and marginals() process rows in blocks of R09_MEAN_BLOCK = 500 inside one MC_SEED stream (the Monte Carlo stream differs from an unblocked run for n > 500; simulate() is unchanged, and simulate with key = seq_len(n) is the pipeline-equivalent path); the conditional probabilities, chain order and sparse-level handling unchanged
 
 # R09: classifier chain (xgboost, objective multi:softprob, num_class 5;
-# spec §5.2, R9). In the fixed order R09_ORDER, E4 -> E1 -> E3 -> E2 -> E5,
+# spec sec. 5.2, R9). In the fixed order R09_ORDER, E4 -> E1 -> E3 -> E2 -> E5,
 # the classifier of each dimension has the set's predictors plus the levels
 # of the dimensions before it, entered as numeric predictors 1-5; in training
 # they are the respondents' true levels.

@@ -1,5 +1,5 @@
 # Ported from iHEA_2027 R/functions/mvop.R at freeze-ihea2027-abstract-v3 (a79e102); changes: mvop_profile_prob, MVOP_ABSEPS, MVOP_SEED and register_mvop_response not ported (profile_prob is evaluation-only, so mvtnorm is not needed; pbivnorm and Matrix are called with ::); mvop_simulate_profiles takes a key (K units, row (i, m) uses unit key[i] + K * (m - 1); key = seq_len(n) consumes the RNG as the pipeline); mvop_mean_utility takes a p2e_vs value set via .vs_additive() and .clamp(), runs its Monte Carlo part under withr::with_seed(MC_SEED) with pinned RNG kinds; other MVOP_* constants and the estimator unchanged
-# Shared code of the correlated ordered response models (spec §5.2, "Response
+# Shared code of the correlated ordered response models (spec sec. 5.2, "Response
 # models R5, R6 and R10: estimation"; plan Task 15): the multivariate ordered
 # probit R05 (D01 forms) and R06 (conceptual predictors per dimension), and
 # the Gaussian copula with ordered-logit margins R10 (R01's variants). In

@@ -1,6 +1,6 @@
 # Ported from iHEA_2027 R/functions/models/D12_klapproth.R at freeze-ihea2027-abstract-v3 (a79e102); changes: constructor .method_D12() instead of register_method(); formulas take baseenv() instead of globalenv(); stats functions namespaced; the draws are .d12_draw (keyed, with draw_type: as_published is mu + sigma z unclamped, corrected uses .censored_normal_location and clamps) instead of .d12_predict_draws; the fit stores no lm object
 
-# D12: the Klapproth et al. (2020) specification, refitted (spec §5.1, D12).
+# D12: the Klapproth et al. (2020) specification, refitted (spec sec. 5.1, D12).
 # The fair, leakage-free comparison with the published algorithm K-pub
 # (klapproth2020.R): Klapproth's model search, rerun on each training set.
 # One variant, list(form = "klapproth"), for every set:
