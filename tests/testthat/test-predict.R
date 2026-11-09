@@ -2,6 +2,11 @@ use_stand_in_fits()
 quiet <- function(expr) suppressMessages(expr)
 # errors raised after the set message: keep the output clean
 expect_error <- function(object, ...) testthat::expect_error(suppressMessages(object), ...)
+# the messages of a call must include one matching regex; the others are muffled
+expect_msg <- function(expr, regexp) {
+  msgs <- testthat::capture_messages(expr)
+  testthat::expect_match(msgs, regexp, all = FALSE)
+}
 
 # Collect the warnings of an expression without printing them
 warnings_of <- function(expr) {
@@ -23,25 +28,26 @@ test_that("family/method resolution covers 0, 1 and 2 arguments", {
 })
 
 test_that("cohort draws are the per-draw means of individual draws", {
-  nd <- user_frame(make_synthetic_data(12, 2)); nd$arm <- rep(c("a", "b"), 6)
+  nd <- user_frame(make_synthetic_data(12, 2)); nd$arm <- rep(c("b", "a"), 6)   # first group is not first alphabetically
   ind <- quiet(predict_eq5d(nd, "UK", mode = "individual", draws = 8, seed = 1))
   coh <- quiet(predict_eq5d(nd, "UK", mode = "cohort", group = "arm", draws = 8, seed = 1))
   manual <- aggregate(utility ~ .draw, data = transform(ind, arm = nd$arm[.row])[nd$arm[ind$.row] == "a", ], mean)
   expect_equal(coh$mean_utility[coh$arm == "a"], manual$utility)
   expect_named(coh, c("arm", ".draw", "n", "mean_utility"))
   expect_equal(unique(coh$n[coh$arm == "a"]), 6L)
+  expect_equal(unique(coh$arm), c("b", "a"))   # ordered by first appearance
 })
 
 test_that("crosswalk and response-retrain routes are announced", {
   nd <- user_frame(make_synthetic_data(5, 2))
-  expect_message(predict_eq5d(nd, "USA", family = "direct", draws = 4), "iso crosswalk from (FR|DE|UK) to USA")
-  expect_message(predict_eq5d(nd, "UK", retrain = TRUE), "no effect for response methods")
+  expect_msg(predict_eq5d(nd, "USA", family = "direct", draws = 4), "iso crosswalk from (FR|DE|UK) to USA")
+  expect_msg(predict_eq5d(nd, "UK", retrain = TRUE), "no effect for response methods")
   expect_error(predict_eq5d(nd, "UK", family = "direct", dimensions = TRUE), "need a response method")
   expect_error(predict_eq5d(nd, "UK", mode = "individual", family = "direct", dimensions = TRUE),
                "need a response method")
-  expect_message(predict_eq5d(nd, "UK"), "Using predictor set S1 \\(")
+  expect_msg(predict_eq5d(nd, "UK"), "Using predictor set S1 \\(")
   expect_error(predict_eq5d(nd, "USA", family = "direct", crosswalk_from = "JP"), "FR, DE, UK")
-  expect_message(predict_eq5d(nd, "USA", family = "direct", crosswalk_from = "FR"), "crosswalk from FR to USA")
+  expect_msg(predict_eq5d(nd, "USA", family = "direct", crosswalk_from = "FR"), "crosswalk from FR to USA")
 })
 
 test_that("tibbles, grouped tibbles, one row and NA ids", {
@@ -156,12 +162,52 @@ test_that("result attributes record the call", {
   expect_equal(i$B, 4)
 })
 
-test_that("crosswalked direct mean lies in the target range and near the median route", {
+test_that("crosswalked direct mean is the mean of the crosswalked draws", {
   nd <- user_frame(make_synthetic_data(5, 2))
-  r <- quiet(predict_eq5d(nd, "USA", family = "direct"))
-  expect_true(all(r$utility <= 1 & r$utility >= min(p2e_value_set("USA")$u)))
-  m <- quiet(predict_eq5d(nd, "USA", family = "direct", statistic = "median"))
-  expect_equal(r$utility, m$utility, tolerance = 0.3)
+  usa <- p2e_value_set("USA")
+  r <- quiet(predict_eq5d(nd, "USA", family = "direct", crosswalk_from = "UK"))
+  expect_true(all(r$utility <= 1 & r$utility >= min(usa$u)))
+  # the same Monte Carlo mean by hand: exact, so the default tolerance applies
+  b <- .load_bundle("D03_clad", "S3", "UK")
+  knots <- .fit_crosswalk(b$vs, usa, b$state_freq)
+  std <- .standardise_input(nd)
+  manual <- .with_mc_seed(rowMeans(.draw_matrix(b, std, usa, N_MC_MEAN, 1:5, "corrected",
+                                                 crosswalk = knots, fits = list(b$point))$u))
+  expect_equal(r$utility, manual)
+})
+
+test_that("the D03 Monte Carlo mean does not depend on the RNG kind", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  base_uk <- quiet(predict_eq5d(nd, "UK", family = "direct"))$utility
+  base_us <- quiet(predict_eq5d(nd, "USA", family = "direct", crosswalk_from = "UK"))$utility
+  old <- RNGkind()
+  withr::defer(do.call(RNGkind, as.list(old)))
+  RNGkind("L'Ecuyer-CMRG")
+  expect_identical(quiet(predict_eq5d(nd, "UK", family = "direct"))$utility, base_uk)
+  expect_identical(quiet(predict_eq5d(nd, "USA", family = "direct", crosswalk_from = "UK"))$utility, base_us)
+  expect_identical(RNGkind()[1], "L'Ecuyer-CMRG")   # the caller's kind is left alone
+})
+
+test_that("the D03 Monte Carlo mean is computed in row blocks", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  whole <- quiet(predict_eq5d(nd, "UK", family = "direct"))$utility
+  local_mocked_bindings(MC_MEAN_BLOCK = 100L)            # n <= block: identical
+  expect_identical(quiet(predict_eq5d(nd, "UK", family = "direct"))$utility, whole)
+  local_mocked_bindings(MC_MEAN_BLOCK = 2L)
+  a <- quiet(predict_eq5d(nd, "UK", family = "direct"))$utility
+  expect_length(a, 5)
+  expect_identical(quiet(predict_eq5d(nd, "UK", family = "direct"))$utility, a)  # deterministic
+  expect_true(all(a >= 0 & a <= 1))
+})
+
+test_that("ignored arguments are announced and level is checked up front", {
+  nd <- user_frame(make_synthetic_data(5, 2)); nd$arm <- rep(c("a", "b"), length.out = 5)
+  expect_msg(predict_eq5d(nd, "UK", family = "direct", retrain = TRUE),
+             "retrain has no effect: UK has a shipped fit")
+  w <- warnings_of(quiet(predict_eq5d(nd, "UK", group = "arm")))
+  expect_length(w, 1); expect_match(w, "group is only used in cohort mode")
+  expect_error(predict_eq5d(nd, "UK", interval = TRUE, level = 1.5), "level")
+  expect_error(predict_eq5d(nd, "UK", interval = TRUE, level = c(.8, .9)), "level")
 })
 
 test_that("a missing predict package is an error with an install hint", {
@@ -176,6 +222,6 @@ test_that("bad arguments are errors", {
   expect_error(predict_eq5d("x", "UK"), "data frame")
   expect_error(predict_eq5d(nd[0, ], "UK"), "no rows")
   expect_error(predict_eq5d(nd, "UK", draws = 0, mode = "individual"), "draws")
-  expect_error(predict_eq5d(nd, "UK", mode = "bad"))
+  expect_error(predict_eq5d(nd, "UK", mode = "bad"), "should be one of")
   expect_error(predict_eq5d(nd, "UK", seed = "a"), "seed")
 })

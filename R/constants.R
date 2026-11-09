@@ -71,3 +71,11 @@ N_MC_MEAN <- 2000L          # draws per respondent for Monte Carlo means
 MC_SEED <- 20261108L        # fixed seed of every Monte Carlo mean
 COHORT_LEVEL <- 0.95        # default cohort summary interval level
 R09_EXACT_MEAN <- FALSE     # R09 mean by Monte Carlo (FALSE) or exact sum
+
+# Runs expr under the fixed Monte Carlo seed with pinned RNG kinds, so a Monte
+# Carlo mean does not depend on the caller's RNGkind() and the caller's stream
+# is left alone. Used by every Monte Carlo mean.
+.with_mc_seed <- function(expr) {
+  withr::with_seed(MC_SEED, expr, .rng_kind = "Mersenne-Twister",
+                   .rng_normal_kind = "Inversion", .rng_sample_kind = "Rejection")
+}

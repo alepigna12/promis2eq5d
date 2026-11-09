@@ -7,6 +7,12 @@
   x
 }
 
+# The id and group columns recorded by predict_eq5d()
+.result_cols <- function(x) {
+  cols <- attr(x, "p2e_cols")
+  list(id = cols$id, group = cols$group)
+}
+
 .result_info <- function(x) {
   info <- attr(x, "p2e_info")
   if (is.null(info)) stop("not a p2e_result: the p2e_info attribute is missing.", call. = FALSE)
@@ -42,6 +48,8 @@ NULL
 #' @rdname p2e_result
 #' @export
 print.p2e_result <- function(x, n = 6, ...) {
+  # a subset such as x[c("a", "b")] loses p2e_info: print it as a data frame
+  if (is.null(attr(x, "p2e_info"))) return(NextMethod())
   info <- .result_info(x)
   vs <- info$value_set
   cat("<p2e_result> ", nrow(x), " rows\n", sep = "")
@@ -58,8 +66,7 @@ print.p2e_result <- function(x, n = 6, ...) {
 }
 
 # Group index (by first appearance of the group columns) of a cohort result
-.cohort_index <- function(df) {
-  gcols <- setdiff(names(df), c(".draw", "n", "mean_utility"))
+.cohort_index <- function(df, gcols) {
   lab <- if (length(gcols)) do.call(paste, c(lapply(df[gcols], as.character), sep = "\r")) else
     rep("", nrow(df))
   key <- match(lab, unique(lab))
@@ -72,7 +79,9 @@ print.p2e_result <- function(x, n = 6, ...) {
 #' @rdname p2e_result
 #' @export
 summary.p2e_result <- function(object, level = 0.90, ...) {
+  if (is.null(attr(object, "p2e_info"))) return(NextMethod())
   info <- .result_info(object)
+  cols <- .result_cols(object)
   df <- .plain_result(object)
   if (info$mode == "mean") {
     u <- df$utility
@@ -85,8 +94,7 @@ summary.p2e_result <- function(object, level = 0.90, ...) {
     u <- as.matrix(object)
     a <- (1 - level) / 2
     first <- match(sort(unique(df$.row)), df$.row)
-    idc <- setdiff(names(df), c(".row", ".draw", "utility", DIM_NAMES))
-    out <- df[first, c(".row", idc), drop = FALSE]
+    out <- df[first, c(".row", cols$id), drop = FALSE]
     out$mean <- unname(rowMeans(u))
     out$sd <- unname(apply(u, 1, stats::sd))
     out$lower <- unname(apply(u, 1, stats::quantile, a))
@@ -94,7 +102,7 @@ summary.p2e_result <- function(object, level = 0.90, ...) {
     rownames(out) <- NULL
     return(out)
   }
-  ix <- .cohort_index(df)
+  ix <- .cohort_index(df, cols$group)
   a <- (1 - COHORT_LEVEL) / 2
   out <- df[ix$first, c(ix$gcols, "n"), drop = FALSE]
   by_g <- split(df$mean_utility, factor(ix$key, levels = seq_along(ix$first)))
@@ -109,7 +117,7 @@ summary.p2e_result <- function(object, level = 0.90, ...) {
 #' @export
 as.matrix.p2e_result <- function(x, ...) {
   # a subset such as x[1:5, ] loses p2e_info: treat it as a plain data frame
-  if (is.null(attr(x, "p2e_info"))) return(as.matrix(.plain_result(x), ...))
+  if (is.null(attr(x, "p2e_info"))) return(NextMethod())
   info <- .result_info(x)
   if (info$mode == "mean") {
     stop("a result in mean mode has no draws; use mode = \"individual\" or \"cohort\".", call. = FALSE)
@@ -123,7 +131,7 @@ as.matrix.p2e_result <- function(x, ...) {
     dimnames(m) <- list(NULL, NULL)
     return(m)
   }
-  ix <- .cohort_index(df)
+  ix <- .cohort_index(df, .result_cols(x)$group)
   m <- matrix(NA_real_, length(ix$first), D)
   m[cbind(ix$key, df$.draw)] <- df$mean_utility
   dimnames(m) <- list(ix$labels, NULL)

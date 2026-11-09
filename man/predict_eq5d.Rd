@@ -144,8 +144,8 @@ set (slow; \code{boot} sets the number of bootstrap refits). Interval coverage
 for a value set never seen in training relies on exchangeability.
 }
 
-\section{D03}{
- mean or median:
+\section{D03 mean or median}{
+
 With \code{statistic = "mean"} (default) the D03 utility is the mean of its
 corrected residual draws (a fixed Monte Carlo seed makes it reproducible),
 so mean mode agrees with cohort means. \code{statistic = "median"} gives the

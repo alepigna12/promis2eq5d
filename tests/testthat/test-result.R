@@ -70,3 +70,28 @@ test_that("as.matrix: rows x draws, groups x draws, error in mean mode", {
   expect_equal(dim(mc), c(2L, 7L)); expect_equal(rownames(mc), c("a", "b"))
   expect_error(as.matrix(quiet(predict_eq5d(nd, "UK"))), "mean mode")
 })
+
+test_that("print, summary and as.matrix work on a column subset", {
+  nd <- res_data(); nd$pid <- paste0("p", 1:12)
+  r <- quiet(predict_eq5d(nd, "UK", id = "pid"))
+  sub <- r[c("pid", "utility")]
+  expect_s3_class(sub, "p2e_result")
+  out <- capture.output(print(sub))
+  expect_true(any(grepl("utility", out)))
+  expect_false(any(grepl("method:", out)))
+  expect_s3_class(summary(sub), "table")            # the plain data-frame summary
+  expect_equal(dim(as.matrix(sub)), c(12L, 2L))
+})
+
+test_that("summary and as.matrix use the recorded id and group columns", {
+  nd <- res_data(); nd$pid <- paste0("p", 1:12)
+  ind <- quiet(predict_eq5d(nd, "UK", mode = "individual", draws = 5, seed = 1, id = "pid"))
+  coh <- quiet(predict_eq5d(nd, "UK", mode = "cohort", group = "arm", draws = 5, seed = 1))
+  expect_equal(attr(ind, "p2e_cols"), list(id = "pid", group = NULL))
+  expect_equal(attr(coh, "p2e_cols"), list(id = NULL, group = "arm"))
+  s_ind <- summary(ind); s_coh <- summary(coh); m_coh <- as.matrix(coh)
+  ind$extra <- 1; coh$extra <- 1
+  expect_equal(summary(ind), s_ind)
+  expect_equal(summary(coh), s_coh)
+  expect_equal(as.matrix(coh), m_coh)
+})

@@ -63,7 +63,7 @@ SET_DESCRIPTIONS <- c(
 #' set (slow; `boot` sets the number of bootstrap refits). Interval coverage
 #' for a value set never seen in training relies on exchangeability.
 #'
-#' @section D03: mean or median:
+#' @section D03 mean or median:
 #' With `statistic = "mean"` (default) the D03 utility is the mean of its
 #' corrected residual draws (a fixed Monte Carlo seed makes it reproducible),
 #' so mean mode agrees with cohort means. `statistic = "median"` gives the
@@ -162,6 +162,13 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
     warning("interval is only used in mean mode; it is ignored.", call. = FALSE)
     interval <- FALSE
   }
+  if (interval && !(is.numeric(level) && length(level) == 1L && !is.na(level) &&
+                    level > 0 && level < 1)) {
+    stop("level must be a single number strictly between 0 and 1.", call. = FALSE)
+  }
+  if (!is.null(group) && mode != "cohort") {
+    warning("group is only used in cohort mode; it is ignored.", call. = FALSE)
+  }
 
   data <- .plain_frame(data)
   if (nrow(data) == 0L) stop("`data` has no rows.", call. = FALSE)
@@ -227,7 +234,9 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
     seed = if (is.null(seed)) NA else seed,
     version = utils::packageVersion("promis2eq5d")
   )
-  structure(out, p2e_info = info, class = c("p2e_result", "data.frame"))
+  structure(out, p2e_info = info,
+            p2e_cols = list(id = idcol, group = gcols),
+            class = c("p2e_result", "data.frame"))
 }
 
 .check_flag <- function(x, name) {
@@ -299,6 +308,7 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
   }
   shipped <- identical(vs$source, "eq5d") && vs$code %in% SHIPPED_TARGETS
   if (shipped) {
+    if (retrain) message("retrain has no effect: ", vs$code, " has a shipped fit")
     return(list(bundle = .load_bundle(m$id, set, vs$code), knots = NULL, source = NA_character_,
                 retrained = FALSE))
   }
@@ -342,10 +352,21 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
   }
   if (m$id == "D12_klapproth" && is.null(knots)) return(.clamp(p, bundle$vs))
   if (m$id == "D03_clad" && statistic == "median") return(g(p))
-  withr::with_seed(MC_SEED, rowMeans(
-    .draw_matrix(bundle, newdata, vs, N_MC_MEAN, seq_len(n), "corrected",
-                 crosswalk = knots, fits = list(bundle$point))$u))
+  # row blocks bound the memory (n x N_MC_MEAN per block); one stream
+  rows <- seq_len(n)
+  out <- numeric(n)
+  .with_mc_seed({
+    for (b in split(rows, ceiling(rows / MC_MEAN_BLOCK))) {
+      out[b] <- rowMeans(.draw_matrix(bundle, newdata[b, , drop = FALSE], vs, N_MC_MEAN,
+                                      seq_along(b), "corrected", crosswalk = knots,
+                                      fits = list(bundle$point))$u)
+    }
+  })
+  out
 }
+
+# Rows per block of the D03/D12 Monte Carlo mean (tests may lower it)
+MC_MEAN_BLOCK <- 500L
 
 # Cohort draws: group means of the draws matrix u (n x D)
 .cohort_draws <- function(data, gcols, u) {

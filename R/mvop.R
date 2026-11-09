@@ -346,8 +346,7 @@ mvop_mean_utility <- function(fit, newdata, vs) {
   u <- a$intercept - dec
   if (any(a$remainder != 0)) {
     rows <- seq_len(nrow(newdata))
-    withr::with_seed(MC_SEED, .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
-                     .rng_sample_kind = "Rejection", {
+    .with_mc_seed({
       for (b in split(rows, ceiling(rows / MVOP_MEAN_BLOCK))) {
         prof <- mvop_simulate_profiles(fit, newdata[b, , drop = FALSE], N_MC_MEAN)
         u[b] <- u[b] + rowMeans(matrix(a$remainder[.state_index(prof)], length(b)))

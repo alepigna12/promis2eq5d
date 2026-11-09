@@ -87,8 +87,7 @@ R09_MEAN_BLOCK <- 500L
 # Runs f under the fixed Monte Carlo seed with pinned RNG kinds, leaving the
 # caller's stream alone
 .r09_mc <- function(f) {
-  withr::with_seed(MC_SEED, .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
-                   .rng_sample_kind = "Rejection", f())
+  .with_mc_seed(f())
 }
 
 # Raw predictors of a set as a numeric matrix with column names
