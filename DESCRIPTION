@@ -1,0 +1,16 @@
+Package: promis2eq5d
+Type: Package
+Title: Map 'PROMIS' Profiles to 'EQ-5D' Utilities with Uncertainty
+Version: 0.0.0.9000
+Authors@R: person("Alessio", "Pignatelli", email = "apignat1@jh.edu", role = c("aut", "cre"))
+Description: Predicts 'EQ-5D-5L' utilities and dimension responses from 'PROMIS-29'
+    health survey profiles for any country value set in the 'eq5d' package.
+    Supports mean, individual-draw and cohort-draw prediction modes.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports: eq5d (>= 0.17.0), splines, stats, tools, utils, withr
+Suggests: glmnet, Matrix, ordinal, pbivnorm, quantreg, testthat (>= 3.0.0), xgboost
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.1.0

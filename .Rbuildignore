@@ -1,0 +1,6 @@
+^docs$
+^data-raw$
+^handoff-.*\.md$
+^\.git
+^LICENSE\.md$
+^\.superpowers$
