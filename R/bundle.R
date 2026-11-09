@@ -35,10 +35,19 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
        r_version = R.version.string, pkg_versions = ver, created = Sys.time())
 }
 
-# A replicate fails when fit() errors or reports isFALSE(converged)
+# A fit did not converge when f$converged is FALSE or f$fit_info$converged is
+# not TRUE (the pipeline rule; R06 and R09 report fit_info only). A fit with
+# neither field counts as converged.
+.fit_converged <- function(f) {
+  if (isFALSE(f$converged)) return(FALSE)
+  if (is.list(f[["fit_info"]]) && !isTRUE(f[["fit_info"]]$converged)) return(FALSE)
+  TRUE
+}
+
+# A replicate fails when fit() errors or the fit did not converge (.fit_converged)
 .try_fit <- function(method, train, set, variant, oof = NULL) {
   f <- tryCatch(method$fit(train, set, variant, oof), error = function(e) NULL)
-  if (is.null(f) || isFALSE(f$converged)) NULL else f
+  if (is.null(f) || !.fit_converged(f)) NULL else f
 }
 
 # Bootstrap row indices: resampled within each country (in sorted order) when
@@ -52,13 +61,13 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
 }
 
 # The point and fold fits must fit and converge (as the pipeline's
-# .checked_fit): an error from fit() or converged = FALSE stops with the
+# .checked_fit): an error from fit() or a fit that did not converge (.fit_converged) stops with the
 # method, set and which fit failed
 .fit_required <- function(method, set, what, expr) {
   f <- tryCatch(expr, error = function(e) {
     stop(method$id, " (set ", set, "): ", what, " failed: ", conditionMessage(e), call. = FALSE)
   })
-  if (isFALSE(f$converged)) {
+  if (!.fit_converged(f)) {
     stop(method$id, " (set ", set, "): ", what, " did not converge", call. = FALSE)
   }
   f

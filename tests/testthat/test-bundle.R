@@ -133,3 +133,17 @@ test_that("non-converged or failing point and fold fits stop the bundle", {
 test_that("the shipped methods resolve through the registry", {
   for (id in c("R06_mvop_dim", "R09_chain", "D03_clad")) expect_identical(.p2e_method(id)$id, id)
 })
+
+test_that("fit_info$converged = FALSE (no top-level converged) is honoured everywhere", {
+  tr <- make_synthetic_data(120, 1)
+  expect_error(.fit_bundle(toy_method(fi_bad_call = 1), tr, "S4", "UK", list(), 3, 0, 1),
+               "point fit did not converge")
+  expect_error(.fit_bundle(toy_method(fi_bad_call = 3), tr, "S4", "UK", list(), 3, 0, 1),
+               "fold 2 fit did not converge")
+  expect_error(.fit_bundle(toy_method(uses_oof = TRUE, fi_bad_call = 2), tr, "S4", "UK", list(), 3, 0, 1),
+               "fold 2 fit did not converge")
+  b <- .fit_bundle(toy_method(fi_bad_call = 6), tr, "S4", "UK", list(), 3, 3, 1)  # boot 2 = call 1 + K + 2
+  expect_equal(b$boot_failed, 1L); expect_length(b$boot, 2)
+  expect_true(.fit_converged(list()))
+  expect_false(.fit_converged(list(fit_info = list(converged = NA))))
+})

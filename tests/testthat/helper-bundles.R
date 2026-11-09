@@ -5,7 +5,7 @@
 # 1 + K + b) and errors on bootstrap replicate `fail_on`. With uses_oof = TRUE
 # the point fit is made after the folds and the oof it receives is kept in
 # fit$oof_given.
-toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3, bad_call = NULL, err_call = NULL) {
+toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3, bad_call = NULL, err_call = NULL, fi_bad_call = NULL) {
   calls <- new.env()
   calls$n <- 0L
   cols <- PREDICTOR_SETS$S4
@@ -22,10 +22,12 @@ toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3, bad_call = NULL,
       # lm.fit on a plain matrix: the fit holds no environments, so it saves silently
       X <- cbind(1, as.matrix(train[cols]))
       m <- stats::lm.fit(X, train$y)
-      list(coef = unname(m$coefficients), sd = sqrt(sum(m$residuals^2) / max(1, nrow(X) - ncol(X))),
+      out <- list(coef = unname(m$coefficients), sd = sqrt(sum(m$residuals^2) / max(1, nrow(X) - ncol(X))),
            set = set, variant = variant, oof_given = oof, ids = train$ID,
-           n_train = nrow(train), draw_probe = stats::runif(1),
-           converged = !(!is.null(bad_call) && calls$n == bad_call))
+           n_train = nrow(train), draw_probe = stats::runif(1))
+      if (!is.null(bad_call)) out$converged <- calls$n != bad_call
+      if (!is.null(fi_bad_call)) out$fit_info <- list(converged = calls$n != fi_bad_call)
+      out
     },
     point = function(fit, newdata) as.numeric(cbind(1, as.matrix(newdata[cols])) %*% fit$coef),
     draw = function(fit, newdata, M, key, draw_type, lo) {
