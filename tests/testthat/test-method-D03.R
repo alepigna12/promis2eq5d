@@ -21,7 +21,7 @@ test_that("D03 keyed draws reproduce the documented scheme", {
   g <- .rd_groups(mu, bd$point$oof_mu)
   hand <- matrix(NA_real_, 5, M)
   for (i in 1:5) {
-    pool <- bd$point$oof_resid[g$bin %in% as.integer(strsplit(g$key[i], ",")[[1]])]
+    pool <- sort(bd$point$oof_resid[g$bin %in% as.integer(strsplit(g$key[i], ",")[[1]])])
     hand[i, ] <- mu[i] + pool[pmax(1, ceiling(U[key[i], ] * length(pool)))]
   }
   expect_equal(d, hand)
@@ -92,4 +92,23 @@ test_that("lasso_dummies bundle OOF equals the standalone fit's internal OOF", {
   s <- m$fit(train, "S1", v, oof = NULL)
   expect_equal(s$oof_mu, b$point$oof_mu); expect_equal(s$oof_resid, b$point$oof_resid)
   expect_equal(s$cols, b$point$cols); expect_equal(s$beta, b$point$beta)
+})
+
+test_that("D03 common key gives positively rank-correlated draws across different pools", {
+  skip_if_not_installed("quantreg")
+  bd <- stand_in_bundle("D03_clad", "S3", "UK"); m <- .p2e_method("D03")
+  nd <- make_synthetic_data(300, 2)
+  mu <- m$point(bd$point, nd)
+  g <- .rd_groups(mu, bd$point$oof_mu)
+  expect_gt(length(unique(g$key)), 1L)
+  # one row from each of two different pools, sharing one key (one person, two time points)
+  i <- c(which(g$key == g$key[1])[1], which(g$key != g$key[1])[1])
+  M <- 2000
+  d <- withr::with_seed(3, m$draw(bd$point, nd[i, ], M, c(1L, 1L), "corrected", -0.5))
+  r <- d - mu[i]
+  # ties in the pools keep it below 1; the unsorted pools gave about 0
+  expect_gt(stats::cor(r[1, ], r[2, ], method = "spearman"), 0.5)
+  # independent rows are not correlated
+  d2 <- withr::with_seed(3, m$draw(bd$point, nd[i, ], M, 1:2, "corrected", -0.5))
+  expect_lt(abs(stats::cor((d2 - mu[i])[1, ], (d2 - mu[i])[2, ], method = "spearman")), 0.2)
 })

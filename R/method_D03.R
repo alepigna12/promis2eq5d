@@ -133,7 +133,8 @@ parametric_variants <- function(set) {
   out <- matrix(NA_real_, n, M)
   for (k in unique(g$key)) {
     rows <- which(g$key == k)
-    r <- fit$oof_resid[g$bin %in% as.integer(strsplit(k, ",")[[1]])]
+    # sorted, so a shared U selects the same quantile in every pool (within_id = "common")
+    r <- sort(fit$oof_resid[g$bin %in% as.integer(strsplit(k, ",")[[1]])])
     idx <- pmax(1L, ceiling(U[key[rows], , drop = FALSE] * length(r)))
     out[rows, ] <- mu[rows] + matrix(r[idx], length(rows), M)
   }
