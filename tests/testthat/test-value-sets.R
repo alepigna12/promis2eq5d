@@ -8,7 +8,9 @@ test_that("lookup by name, code and alias gives the eq5d value set", {
   expect_equal(uk$u, eq5d::eq5d(.all_states_df(), version = "5L", type = "VT", country = "UK"))
   expect_identical(p2e_value_set("gbr")$u, uk$u)
   expect_identical(p2e_value_set("United States")$name, "USA")
+  .vs_env$messaged <- character()                                  # the message is shown once per session
   expect_message(p2e_value_set("Japan"), "Japan_DCE")
+  expect_no_message(p2e_value_set("Japan"))
   expect_identical(p2e_value_set("Japan", version = "DCE")$name, "Japan_DCE")
   expect_error(p2e_value_set("Narnia"), "no EQ-5D-5L value set")
   expect_identical(p2e_value_set("usa")$u, p2e_value_set("United States")$u)
@@ -21,7 +23,12 @@ test_that("codes, defaults for multi-version countries and version checks", {
   expect_identical(p2e_value_set("France")$code, "FR")
   expect_identical(p2e_value_set("deu")$name, "Germany")
   expect_identical(p2e_value_set("Japan", version = "DCE")$code, "JP_DCE")
-  expect_identical(suppressMessages(p2e_value_set("japan"))$name, "Japan_cTTO")
+  d <- suppressMessages(p2e_value_set("japan"))                    # defaults carry their suffix
+  expect_identical(c(d$name, d$code, d$version), c("Japan_cTTO", "JP_cTTO", "cTTO"))
+  expect_identical(p2e_value_set("japan_ctto")$u, d$u)
+  expect_identical(suppressMessages(p2e_value_set("pe"))$code, "PE_cTTO")
+  s22 <- suppressMessages(p2e_value_set("SE"))
+  expect_identical(c(s22$name, s22$code, s22$version), c("Sweden_2022", "SE_2022", "2022"))
   expect_identical(suppressMessages(p2e_value_set("peru"))$name, "Peru_cTTO")
   expect_identical(suppressMessages(p2e_value_set("sweden"))$name, "Sweden_2022")
   expect_identical(p2e_value_set("Sweden", version = "2020")$name, "Sweden_2020")
@@ -38,6 +45,18 @@ test_that("alias table covers every eq5d 5L country", {
   expect_true(all(vt %in% .vs_env$aliases$eq5d_name))
   expect_identical(.vs_env$aliases$alias, tolower(.vs_env$aliases$alias))
   expect_false(anyDuplicated(.vs_env$aliases$alias) > 0)
+})
+test_that("every eq5d 5L country is in the hand-written country table (drift check)", {
+  vt <- eq5d::valuesets(type = "VT", version = "5L")$Country
+  base <- sub("_(cTTO|DCE|20[0-9]{2})$", "", vt)
+  expect_true(all(base %in% .VS_COUNTRY_TABLE$base), info = paste(setdiff(base, .VS_COUNTRY_TABLE$base), collapse = ", "))
+})
+test_that("an unmapped eq5d country never stops the alias build", {
+  withr::defer(.build_vs_aliases())
+  testthat::local_mocked_bindings(.VS_COUNTRY_TABLE = .VS_COUNTRY_TABLE[.VS_COUNTRY_TABLE$base != "Egypt", ])
+  expect_silent(.build_vs_aliases())
+  expect_identical(.vs_env$aliases$eq5d_name[.vs_env$aliases$alias == "egypt"], "Egypt")
+  expect_false("eg" %in% .vs_env$aliases$alias)
 })
 # Verified at the freeze tag: the pipeline builds its table with eq5d::eq5d() for
 # "France", "Germany" and "UK", and its tests assert these constants.
@@ -57,6 +76,7 @@ test_that("user tables must cover all states once", {
   expect_error(p2e_value_set(rbind(t, t[1, ])), "3,125")
   expect_error(p2e_value_set(t[, -6]), "utility")
   tt <- t; tt$utility[5] <- NA; expect_error(p2e_value_set(tt), "utility")
+  withr::local_seed(42)
   shuffled <- t[sample(3125), ]                                     # row order is free
   expect_identical(p2e_value_set(shuffled)$u, p2e_value_set("DE")$u)
   t2 <- t; t2$utility <- rev(t$utility)                            # same code "user", other utilities: never cached

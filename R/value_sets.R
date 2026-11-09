@@ -10,6 +10,7 @@
 .vs_env <- new.env(parent = emptyenv())
 .vs_env$cache <- list()      # p2e_vs objects by code (eq5d value sets only)
 .vs_env$additive <- list()   # .vs_additive() results by code (eq5d value sets only)
+.vs_env$messaged <- character()   # countries whose "several value sets" message was shown
 
 # eq5d country name, ISO-2 code, ISO-3 code and extra lower-case English
 # variants (";"-separated) for each 5L country. Codes of the UK and England
@@ -64,7 +65,7 @@
   for (nm in vs5) {
     b <- base_of(nm)
     r <- tab[tab$base == b, ]
-    if (nrow(r) != 1L) stop("internal error: no country table row for eq5d value set ", nm)
+    if (nrow(r) != 1L) { add(nm, nm); next }   # unmapped (newer eq5d): exact name only, never fail at load
     target <- if (b %in% names(.VS_DEFAULTS)) .VS_DEFAULTS[[b]] else nm
     add(c(nm, gsub("_", " ", nm)), nm)            # full eq5d name, exact
     add(c(b, gsub("_", " ", b), r$iso2, r$iso3, strsplit(r$variants, ";")[[1]]), target)
@@ -92,7 +93,8 @@
   if (length(b)) {
     paste0(.VS_COUNTRY_TABLE$iso2[.VS_COUNTRY_TABLE$base == b[1]], "_", sub("^[^_]*_", "", name))
   } else {
-    .VS_COUNTRY_TABLE$iso2[.VS_COUNTRY_TABLE$base == name]
+    v <- .VS_COUNTRY_TABLE$iso2[.VS_COUNTRY_TABLE$base == name]
+    if (length(v)) v else NA_character_
   }
 }
 
@@ -137,14 +139,15 @@
              paste(sfx, collapse = ", "), call. = FALSE)
       }
       nm <- alts[hit]; suffix <- sfx[hit]
-    } else if (exact) {
-      suffix <- sub("^[^_]*_", "", nm)
     } else {
-      # the base name or a country code was given: use the documented default and say so
-      message("'", country, "' has several EQ-5D-5L value sets (", paste(alts, collapse = ", "),
-              "); using ", nm, ". Pass version = (", paste(sfx, collapse = ", "),
-              ") to choose another.")
-      code <- .VS_COUNTRY_TABLE$iso2[.VS_COUNTRY_TABLE$base == b[1]]
+      suffix <- sub("^[^_]*_", "", nm)
+      if (!exact && !b[1] %in% .vs_env$messaged) {
+        # a base name or country code: the documented default, announced once per session
+        .vs_env$messaged <- c(.vs_env$messaged, b[1])
+        message("'", country, "' has several EQ-5D-5L value sets (", paste(alts, collapse = ", "),
+                "); using ", nm, ". Pass version = (", paste(sfx, collapse = ", "),
+                ") to choose another.")
+      }
     }
   } else if (!is.null(version)) {
     stop("country '", nm, "' has no alternative versions; version must be NULL", call. = FALSE)
@@ -191,8 +194,10 @@
 #' first element is state 11111 and the last 55555.
 #'
 #' Japan, Peru and Sweden have several value sets in 'eq5d'. The defaults are
-#' `"Japan_cTTO"`, `"Peru_cTTO"` and `"Sweden_2022"`, with a message naming the
-#' alternatives; use `version` to choose one.
+#' `"Japan_cTTO"`, `"Peru_cTTO"` and `"Sweden_2022"`, with codes `"JP_cTTO"`,
+#' `"PE_cTTO"` and `"SE_2022"` and the suffix as `version`. A message naming
+#' the alternatives is shown once per session and country; use `version` to
+#' choose one.
 #'
 #' @param country A country name or code (for example `"UK"`, `"gbr"`,
 #'   `"United States"`), a data frame with columns `MO`, `SC`, `UA`, `PD`, `AD`
@@ -203,7 +208,7 @@
 #'
 #' @return An object of class `p2e_vs`: a list with `code` (for example
 #'   `"UK"`; `"user"` for a table), `name` (the 'eq5d' country name), `version`
-#'   (the alternative suffix, else `NA`), `source` (`"eq5d"` or `"user"`) and
+#'   (the alternative suffix, such as `"DCE"` or `"cTTO"`; `NA` for a country with one value set), `source` (`"eq5d"` or `"user"`) and
 #'   `u`, the 3,125 utilities in state order.
 #' @examples
 #' uk <- p2e_value_set("UK")

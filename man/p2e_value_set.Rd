@@ -18,7 +18,7 @@ as the 'eq5d' name suffix, such as \code{"DCE"} or \code{"2020"}.}
 \value{
 An object of class \code{p2e_vs}: a list with \code{code} (for example
 \code{"UK"}; \code{"user"} for a table), \code{name} (the 'eq5d' country name), \code{version}
-(the alternative suffix, else \code{NA}), \code{source} (\code{"eq5d"} or \code{"user"}) and
+(the alternative suffix, such as \code{"DCE"} or \code{"cTTO"}; \code{NA} for a country with one value set), \code{source} (\code{"eq5d"} or \code{"user"}) and
 \code{u}, the 3,125 utilities in state order.
 }
 \description{
@@ -32,8 +32,10 @@ State order: element \code{i} of \code{u} belongs to the profile with levels
 first element is state 11111 and the last 55555.
 
 Japan, Peru and Sweden have several value sets in 'eq5d'. The defaults are
-\code{"Japan_cTTO"}, \code{"Peru_cTTO"} and \code{"Sweden_2022"}, with a message naming the
-alternatives; use \code{version} to choose one.
+\code{"Japan_cTTO"}, \code{"Peru_cTTO"} and \code{"Sweden_2022"}, with codes \code{"JP_cTTO"},
+\code{"PE_cTTO"} and \code{"SE_2022"} and the suffix as \code{version}. A message naming
+the alternatives is shown once per session and country; use \code{version} to
+choose one.
 }
 \examples{
 uk <- p2e_value_set("UK")
