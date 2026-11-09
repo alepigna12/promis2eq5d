@@ -89,9 +89,9 @@ SET_DESCRIPTIONS <- c(
 #' stay aligned across all rows in both settings.
 #'
 #' @section Trademarks:
-#' EQ-5D\Sexpr[results=rd]{"\\\\enc{™}{(TM)}"} is a trade mark of the EuroQol Research Foundation.
+#' EQ-5D\Sexpr[results=rd]{"\\\\enc{\u2122}{(TM)}"} is a trade mark of the EuroQol Research Foundation.
 #'
-#' PROMIS\Sexpr[results=rd]{"\\\\enc{®}{(R)}"} is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.
+#' PROMIS\Sexpr[results=rd]{"\\\\enc{\u00ae}{(R)}"} is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.
 #'
 #' @param data A data frame (or tibble) with one row per person or per person
 #'   and time point.
