@@ -118,3 +118,64 @@ test_that("a bad draw_type errors", {
   expect_error(.draw_matrix(b, nd, p2e_value_set("UK"), 3, 1:3, "nope"), "draw_type")
   expect_error(.draw_matrix(b, nd, p2e_value_set("UK"), 3, 1:3, NA_character_), "draw_type")
 })
+
+test_that("each output row maps to its own input row across several blocks (direct)", {
+  testthat::local_mocked_bindings(ENGINE_BLOCK = 4L)
+  b <- stand_in_bundle("D12_klapproth", "S3K", "UK"); vs <- p2e_value_set("UK")
+  m <- .p2e_method("D12_klapproth")
+  fit <- b$point; fit$sigma <- 1e-9
+  nd0 <- make_synthetic_data(8, 2)
+  key <- c(1L, 2L, 3L, 1L, 4L, 2L, 5L, 6L, 3L, 1L, 7L, 8L, 8L, 5L)   # keys interleaved, 4 blocks
+  nd <- nd0[key, ]
+  expect_gte(length(.block_rows(key, 4L)), 3L)
+  r <- suppressWarnings(.draw_matrix(b, nd, vs, 3, key, "as_published", fits = list(fit)))
+  for (i in seq_along(key)) {
+    expect_equal(r$u[i, ], rep(as.numeric(.clamp(m$point(fit, nd[i, , drop = FALSE]), vs)), 3), tolerance = 1e-6)
+  }
+  expect_gt(length(unique(round(r$u[, 1], 6))), 3)   # rows genuinely differ
+})
+test_that("profiles and u map to their own rows, with a per-row list of value sets (response)", {
+  testthat::local_mocked_bindings(ENGINE_BLOCK = 4L)
+  toy <- list(id = "toy_resp", family = "response",
+              simulate = function(fit, newdata, M, key) {
+                a <- array(NA_integer_, c(nrow(newdata), M, 5L))
+                for (i in seq_len(nrow(newdata))) for (j in 1:5) a[i, , j] <- as.integer((newdata$AGE[i] + j) %% 5L) + 1L
+                a
+              })
+  testthat::local_mocked_bindings(.p2e_method = function(id) toy)
+  bundle <- list(method = "toy_resp", boot = list(1, 2))
+  key <- c(1L, 2L, 3L, 1L, 4L, 2L, 5L, 6L, 3L, 1L)
+  nd <- data.frame(AGE = c(11L, 12L, 13L, 11L, 14L, 12L, 15L, 16L, 13L, 11L))
+  uk <- p2e_value_set("UK"); us <- p2e_value_set("USA")
+  vsl <- rep(list(uk, us), 5)
+  r <- .draw_matrix(bundle, nd, vsl, 4, key, "corrected")
+  expect_gte(length(.block_rows(key, 4L)), 3L)
+  for (i in seq_along(key)) {
+    exp_p <- matrix(rep(as.integer((nd$AGE[i] + 1:5) %% 5L) + 1L, each = 4), 4, 5)
+    expect_identical(matrix(r$profiles[i, , ], 4, 5), exp_p)
+    expect_equal(r$u[i, ], as.numeric(.score(r$profiles[i, , , drop = FALSE], vsl[[i]])))
+  }
+  expect_false(isTRUE(all.equal(r$u[1, 1], .score(r$profiles[1, , , drop = FALSE], us)[1])))
+})
+test_that("key is validated", {
+  b <- stand_in_bundle("D03_clad", "S3", "UK"); nd <- make_synthetic_data(3, 2); vs <- p2e_value_set("UK")
+  for (k in list(c(1L, NA, 2L), c(0L, 1L, 2L), c(1, 1.5, 2), c("a", "b", "c"), 1:2)) {
+    expect_error(.draw_matrix(b, nd, vs, 3, k, "corrected"), "key must")
+  }
+})
+test_that("direct path needs a single value set and a value set on the bundle", {
+  b <- stand_in_bundle("D03_clad", "S3", "UK"); nd <- make_synthetic_data(2, 2)
+  expect_error(.draw_matrix(b, nd, list(p2e_value_set("UK"), p2e_value_set("UK")), 3, 1:2, "corrected"), "single value set")
+  b2 <- b; b2$vs <- NULL
+  expect_error(.draw_matrix(b2, nd, p2e_value_set("UK"), 3, 1:2, "corrected"), "no value set")
+})
+test_that("D12 corrected and D03 as_published are not gap-rounded", {
+  vs <- p2e_value_set("UK"); nd <- make_synthetic_data(30, 2); key <- 1:30
+  b <- 1 - .vs_gap(vs)
+  u12 <- .draw_matrix(stand_in_bundle("D12_klapproth", "S3K", "UK"), nd, vs, 40, key, "corrected")$u
+  expect_true(any(u12 > b & u12 < 1))
+  u03 <- suppressWarnings(.draw_matrix(stand_in_bundle("D03_clad", "S3", "UK"), nd, vs, 40, key, "as_published"))$u
+  expect_true(any(u03 > b & u03 < 1))
+  u03c <- .draw_matrix(stand_in_bundle("D03_clad", "S3", "UK"), nd, vs, 40, key, "corrected")$u
+  expect_false(any(u03c > b & u03c < 1))
+})

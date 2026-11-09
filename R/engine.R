@@ -36,15 +36,22 @@ ENGINE_BLOCK <- 500L
   }
   m <- .p2e_method(bundle$method)
   n <- nrow(newdata)
-  if (length(key) != n) stop("key must have one value per row of newdata", call. = FALSE)
+  if (length(key) != n || !is.numeric(key) || anyNA(key) || any(key < 1) || any(key != round(key))) {
+    stop("key must be a numeric vector with one value per row of newdata, no missing values, ",
+         "and integer values of at least 1", call. = FALSE)
+  }
+  key <- as.integer(key)
   if (length(fits) < 1L) stop("fits must hold at least one fit", call. = FALSE)
   D <- as.integer(D)
   direct <- identical(m$family, "direct")
   if (direct) {
-    if (!is.null(bundle$vs$code) && !identical(vs$code, bundle$vs$code) && is.null(crosswalk)) {
+    if (!inherits(bundle$vs, "p2e_vs")) stop("direct bundle has no value set", call. = FALSE)
+    if (!inherits(vs, "p2e_vs")) stop("a direct method needs the target vs to be a single value set", call. = FALSE)
+    if (!identical(vs$code, bundle$vs$code) && is.null(crosswalk)) {
       stop("the bundle was fitted on value set '", bundle$vs$code, "' but the target is '", vs$code,
            "'; a crosswalk is needed", call. = FALSE)
     }
+    # Still warns with a crosswalk: section 6 keeps g(mu-hat) for as_published, so the clamp and gap biases apply.
     if (draw_type == "as_published" && m$id %in% c("D12_klapproth", "D03_clad")) {
       .as_published_warning(m$id)
     }
@@ -84,7 +91,7 @@ ENGINE_BLOCK <- 500L
         pb[, cols, ] <- m$simulate(fits[[b]], nd_b, length(cols), key_b)
       }
       profiles[rows, , ] <- pb
-      u[rows, ] <- matrix(.score(pb, if (inherits(vs, "p2e_vs")) vs else vs[rows]), nb, D)
+      u[rows, ] <- matrix(.score(pb, if (inherits(vs, "p2e_vs") || length(vs) == 1L) vs else vs[rows]), nb, D)
     }
   }
   list(u = u, profiles = profiles, fit_index = fit_index)
