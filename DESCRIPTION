@@ -1,6 +1,8 @@
 Package: promis2eq5d
 Type: Package
 Title: Map 'PROMIS' Profiles to 'EQ-5D' Utilities with Uncertainty
+URL: https://github.com/alepigna12/promis2eq5d
+BugReports: https://github.com/alepigna12/promis2eq5d/issues
 Version: 0.0.0.9000
 Authors@R: person("Alessio", "Pignatelli", email = "apignat1@jh.edu", role = c("aut", "cre"))
 Description: Predicts 'EQ-5D-5L' utilities and dimension responses from 'PROMIS-29'

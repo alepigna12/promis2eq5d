@@ -4,3 +4,7 @@
 ^\.git
 ^LICENSE\.md$
 ^\.superpowers$
+^fits-cache$
+^\.Rproj\.user$
+^\.Rhistory$
+^.*\.Rproj$
