@@ -70,14 +70,14 @@ p2e_tscores <- function(data, table) {
   }
   table <- as.data.frame(table, stringsAsFactors = FALSE)
   table$domain <- as.character(table$domain)
-  if (!is.numeric(table$raw) || !is.numeric(table$tscore)) {
-    stop("the columns 'raw' and 'tscore' of the T-score table must be numeric.",
-         call. = FALSE)
-  }
   na <- which(is.na(table$domain) | is.na(table$raw) | is.na(table$tscore))
   if (length(na)) {
     stop("the T-score table has missing values in domain, raw or tscore at ",
          .row_text(na), ".", call. = FALSE)
+  }
+  if (!is.numeric(table$raw) || !is.numeric(table$tscore)) {
+    stop("the columns 'raw' and 'tscore' of the T-score table must be numeric.",
+         call. = FALSE)
   }
   bad <- setdiff(table$domain, names(PROMIS_DOMAINS))
   if (length(bad)) {

@@ -33,6 +33,7 @@ test_that("table validation: duplicates, unknown domains, NA, non-data-frame, no
   expect_error(p2e_tscores(d, tb), "XX.*PF")
   tb <- fake_table(); tb$tscore[3] <- NA
   expect_error(p2e_tscores(d, tb), "missing values.*tscore")
+  tb <- fake_table(); tb$tscore <- NA; expect_error(p2e_tscores(d, tb), "missing values")
   expect_error(p2e_tscores(d, "x"), "data frame")
   expect_error(p2e_tscores(d, fake_table()[0, ]), "no rows")
 })
@@ -43,11 +44,20 @@ test_that("a table with missing item columns is an error naming them", {
 })
 test_that("three rows keep their order across all seven T-scores", {
   d <- as.data.frame(as.list(setNames(rep(2, 28), ITEM_IDS)))[rep(1, 3), ]
-  for (id in unname(ITEM_IDS)) d[[id]] <- c(2, 3, 4)
+  # each domain's items take one value per row (raw = 4 * value), differing by domain
+  vals <- list(PF = c(3, 4, 5), ANX = c(4, 5, 1), DEP = c(5, 1, 2), FAT = c(1, 2, 3),
+               SLP = c(2, 3, 4), SR = c(3, 4, 5), PI = c(4, 5, 1))
+  for (dm in names(vals)) for (it in PROMIS_DOMAINS[[dm]]) d[[ITEM_IDS[[it]]]] <- vals[[dm]]
+  # expected T = 10 * domain index + 4 * value: 22 26 30 / 36 40 24 / 50 34 38 / 44 48 52 / 58 62 66 / 72 76 80 / 86 90 74
   ts <- p2e_tscores(d, fake_table())
-  expect_equal(ts$T_PF, 10 * 1 + c(8, 12, 16))
-  expect_equal(ts$T_SLP, 10 * 5 + c(8, 12, 16))
-  expect_equal(ts$T_PI, 10 * 7 + c(8, 12, 16))
+  expect_equal(names(ts), TSCORES)
+  expect_equal(ts$T_PF, c(22, 26, 30))
+  expect_equal(ts$T_ANX, c(36, 40, 24))
+  expect_equal(ts$T_DEP, c(50, 34, 38))
+  expect_equal(ts$T_FAT, c(44, 48, 52))
+  expect_equal(ts$T_SLP, c(58, 62, 66))
+  expect_equal(ts$T_SR, c(72, 76, 80))
+  expect_equal(ts$T_PI, c(86, 90, 74))
 })
 test_that("NA in one domain gives NA only for that domain", {
   d <- as.data.frame(as.list(setNames(rep(2, 28), ITEM_IDS)))[rep(1, 2), ]
