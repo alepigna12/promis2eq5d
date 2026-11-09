@@ -58,7 +58,12 @@
   dir <- file.path(.cache_dir(), "retrain")
   file <- file.path(dir, paste0(m$id, "_", set, "_", vs$code, "_", digest, ".rds"))
 
-  if (isTRUE(cache) && file.exists(file)) return(readRDS(file))
+  if (isTRUE(cache) && file.exists(file)) {
+    cached <- tryCatch(readRDS(file), error = function(e) NULL)
+    if (inherits(cached, "p2e_bundle")) return(cached)
+    warning("the cached file '", file, "' is not a readable promis2eq5d fit bundle; ",
+            "it will be refitted", call. = FALSE)
+  }
 
   b <- .fit_bundle(m, train, set, vs$code, shipped$variant, K = K, B = B, seed = shipped$meta$seed,
                    progress = TRUE, vs = vs, fold_id = shipped$fold_id, fit_folds = interval)

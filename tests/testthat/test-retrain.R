@@ -105,3 +105,39 @@ test_that("a T-score set retrains with a made-up table", {
   rb <- quiet_retrain("D12_klapproth", "S3K", p2e_value_set("USA"), tscore_table = tb, cache = FALSE)
   expect_equal(rb$target, "US"); expect_length(rb$folds, 0); expect_length(rb$boot, 0)
 })
+
+test_that("a corrupt cache file warns, is refitted and overwritten", {
+  cdir <- withr::local_tempdir()
+  withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
+  stand_in_bundle("D03_clad", "S1", "UK")
+  vs <- p2e_value_set("USA")
+  suppressMessages(.retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE))
+  path <- list.files(file.path(cdir, "retrain"), full.names = TRUE)
+  expect_length(path, 1)
+  saveRDS(list(a = 1), path)
+  msgs <- testthat::capture_messages(
+    expect_warning(r <- .retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE),
+                   "will be refitted"))
+  expect_true(any(grepl("point fit", msgs)))
+  expect_s3_class(r, "p2e_bundle")
+  expect_s3_class(readRDS(path), "p2e_bundle")
+})
+
+test_that("T-score retrain replaces the input T_* columns from the table", {
+  doms <- c("PF", "ANX", "DEP", "FAT", "SLP", "SR", "PI")
+  tb <- do.call(rbind, lapply(seq_along(doms), function(i)
+    data.frame(domain = doms[i], raw = 0:40, tscore = 10 * i + (0:40) / 2)))
+  d <- retrain_data()
+  dz <- d; dz[TSCORES] <- 0
+  withr::local_options(promis2eq5d.cache_dir = withr::local_tempdir())
+  withr::local_options(promis2eq5d.training_data = d)
+  stand_in_bundle("D12_klapproth", "S3K", "UK")
+  vs <- p2e_value_set("USA")
+  a <- quiet_retrain("D12_klapproth", "S3K", vs, tscore_table = tb, cache = FALSE)
+  withr::local_options(promis2eq5d.training_data = dz)
+  z <- quiet_retrain("D12_klapproth", "S3K", vs, tscore_table = tb, cache = FALSE)
+  nd <- d[1:20, ]; nd[names(.tscores_internal(nd, tb))] <- .tscores_internal(nd, tb)
+  m <- .p2e_method("D12")
+  expect_equal(m$point(z$point, nd), m$point(a$point, nd))
+  expect_false(isTRUE(all.equal(m$point(a$point, nd), m$point(a$point, transform(nd, T_PF = 0, T_FAT = 0)))))
+})
