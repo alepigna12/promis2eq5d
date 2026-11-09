@@ -179,3 +179,28 @@ test_that("D12 corrected and D03 as_published are not gap-rounded", {
   u03c <- .draw_matrix(stand_in_bundle("D03_clad", "S3", "UK"), nd, vs, 40, key, "corrected")$u
   expect_false(any(u03c > b & u03c < 1))
 })
+
+test_that("same seed and draws on different data: aligned fits and common individual noise", {
+  b <- stand_in_bundle("D12_klapproth", "S3K", "UK"); m <- .p2e_method("D12")
+  vs <- p2e_value_set("UK"); D <- 60
+  nd1 <- make_synthetic_data(5, 2); nd2 <- make_synthetic_data(5, 3)
+  # as_published draws are mu_b + sigma_b * z, so z can be read back off the unclamped cells
+  run <- function(nd, seed) suppressWarnings(
+    withr::with_seed(seed, .draw_matrix(b, nd, vs, D, key = 1:5, draw_type = "as_published")))
+  zmat <- function(r, nd) {
+    z <- r$u
+    for (d in seq_len(D)) {
+      f <- b$boot[[r$fit_index[d]]]
+      z[, d] <- (r$u[, d] - m$point(f, nd)) / f$sigma
+    }
+    z
+  }
+  inside <- function(r) r$u > .vs_min(vs) + 1e-8 & r$u < 1 - 1e-8
+  a <- run(nd1, 11); a2 <- run(nd2, 11); o <- run(nd2, 12)
+  expect_identical(a$fit_index, a2$fit_index); expect_identical(a$fit_index, o$fit_index)
+  ok <- inside(a) & inside(a2)
+  expect_gt(sum(ok), 50)
+  expect_equal(zmat(a, nd1)[ok], zmat(a2, nd2)[ok])
+  ok2 <- inside(a) & inside(o)
+  expect_false(isTRUE(all.equal(zmat(a, nd1)[ok2], zmat(o, nd2)[ok2])))
+})
