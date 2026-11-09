@@ -194,18 +194,25 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
     NULL
   }
   p <- find()
-  if (is.null(p) && identical(method, "R09_chain") && .is_interactive() &&
-      isTRUE(.ask_yes_no(paste0("Fit bundle '", file, "' is not installed. Download it now ",
-                                "with p2e_download()?")))) {
-    p2e_download(method, set)
-    p <- find()
+  if (is.null(p) && identical(method, "R09_chain")) {
+    row <- .manifest_rows(method, set)
+    if (nrow(row) == 1L && .is_interactive() &&
+        isTRUE(.ask_yes_no(sprintf(paste0("Fit bundle '%s' is not installed. Download it now ",
+                                          "(about %.0f MB) with p2e_download()?"),
+                                   file, as.numeric(row$bytes) / 1e6)))) {
+      p2e_download(method, set, .consented = TRUE)
+      p <- find()
+    }
   }
   if (is.null(p)) {
     hint <- if (identical(method, "R09_chain")) {
       paste0("; run p2e_download('R09_chain', set = '", set, "')")
     } else ""
-    stop("fit bundle '", file, "' not found (searched: ", paste(dirs, collapse = ", "), ")", hint,
-         call. = FALSE)
+    lead <- if (identical(method, "R09_chain") && !nrow(.manifest_rows(method, set))) {
+      paste0("no download is available yet for ", method, " ", set, "; ")
+    } else ""
+    stop(lead, "fit bundle '", file, "' not found (searched: ", paste(dirs, collapse = ", "), ")",
+         hint, call. = FALSE)
   }
   b <- readRDS(p)
   if (!inherits(b, "p2e_bundle")) stop("'", p, "' is not a promis2eq5d fit bundle")

@@ -7,7 +7,8 @@
 p2e_download(
   method = "R09_chain",
   set = c("S3", "S1", "S4", "S2", "all"),
-  quiet = FALSE
+  quiet = FALSE,
+  .consented = FALSE
 )
 }
 \arguments{
@@ -18,6 +19,10 @@ downloadable fits.}
 or \code{"all"} for every set that is available.}
 
 \item{quiet}{If \code{TRUE}, suppresses progress output and messages.}
+
+\item{.consented}{Internal. \code{TRUE} when the caller has already obtained
+consent (\code{.load_bundle()} does so after its own prompt). It skips this
+function's prompt and the \code{allow_download} check. Not for users.}
 }
 \value{
 Invisibly, the paths of the installed files.
@@ -47,6 +52,12 @@ Each file is checked against its SHA-256 checksum (computed with
 \code{tools::sha256sum()}, available from R 4.5.0). On older versions of R the
 MD5 checksum is used instead. A mismatch is an error and nothing is
 installed.
+}
+
+\section{Timeout}{
+
+The download timeout is raised to at least one hour while a file is
+transferred, because the fits are large, and restored afterwards.
 }
 
 \examples{

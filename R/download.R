@@ -21,11 +21,18 @@
 #' MD5 checksum is used instead. A mismatch is an error and nothing is
 #' installed.
 #'
+#' @section Timeout:
+#' The download timeout is raised to at least one hour while a file is
+#' transferred, because the fits are large, and restored afterwards.
+#'
 #' @param method The response method to download. Only `"R09_chain"` has
 #'   downloadable fits.
 #' @param set The predictor set to download: `"S3"`, `"S1"`, `"S4"`, `"S2"`,
 #'   or `"all"` for every set that is available.
 #' @param quiet If `TRUE`, suppresses progress output and messages.
+#' @param .consented Internal. `TRUE` when the caller has already obtained
+#'   consent (`.load_bundle()` does so after its own prompt). It skips this
+#'   function's prompt and the `allow_download` check. Not for users.
 #'
 #' @return Invisibly, the paths of the installed files.
 #'
@@ -38,15 +45,14 @@
 #' }
 #' @export
 p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "all"),
-                         quiet = FALSE) {
+                         quiet = FALSE, .consented = FALSE) {
   set <- match.arg(set)
   m <- .p2e_method(method)
   method <- m$id
   wanted <- if (identical(set, "all")) c("S3", "S1", "S4", "S2") else set
 
-  man <- .fit_manifest()
   rows <- lapply(wanted, function(s) {
-    r <- man[man$method == method & man$set == s, , drop = FALSE]
+    r <- .manifest_rows(method, s)
     if (nrow(r) == 1L) return(r)
     if (identical(set, "all")) {
       if (!quiet) message("no download is available yet for ", method, " ", s, "; skipping")
@@ -60,17 +66,19 @@ p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "
   }
   rows <- do.call(rbind, rows)
 
-  mb <- sum(as.numeric(rows$bytes), na.rm = TRUE) / 1e6
-  if (.is_interactive()) {
-    question <- sprintf("Download %d fit file(s) for %s (about %.0f MB) into %s?",
-                        nrow(rows), method, mb, file.path(.cache_dir(), "fits"))
-    if (!isTRUE(.ask_yes_no(question))) {
-      stop("download of ", method, " fits declined", call. = FALSE)
+  if (!isTRUE(.consented)) {
+    mb <- sum(as.numeric(rows$bytes), na.rm = TRUE) / 1e6
+    if (.is_interactive()) {
+      question <- sprintf("Download %d fit file(s) for %s (about %.0f MB) into %s?",
+                          nrow(rows), method, mb, file.path(.cache_dir(), "fits"))
+      if (!isTRUE(.ask_yes_no(question))) {
+        stop("download of ", method, " fits declined", call. = FALSE)
+      }
+    } else if (!isTRUE(getOption("promis2eq5d.allow_download", FALSE))) {
+      stop("download of ", method, " fits needs consent in a non-interactive session; run ",
+           "options(promis2eq5d.allow_download = TRUE) and then p2e_download('", method,
+           "', set = '", set, "')", call. = FALSE)
     }
-  } else if (!isTRUE(getOption("promis2eq5d.allow_download", FALSE))) {
-    stop("download of ", method, " fits needs consent in a non-interactive session; run ",
-         "options(promis2eq5d.allow_download = TRUE) and then p2e_download('", method,
-         "', set = '", set, "')", call. = FALSE)
   }
 
   installed <- character()
@@ -86,6 +94,16 @@ p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "
   data.frame(method = character(), set = character(), url = character(),
              sha256 = character(), md5 = character(), bytes = numeric(),
              stringsAsFactors = FALSE)
+}
+
+# The manifest rows for (method, set): zero or one. Duplicates are an error.
+.manifest_rows <- function(method, set) {
+  man <- .fit_manifest()
+  r <- man[man$method == method & man$set == set, , drop = FALSE]
+  if (nrow(r) > 1L) {
+    stop("the manifest has duplicate rows for ", method, " ", set, call. = FALSE)
+  }
+  r
 }
 
 .is_interactive <- function() interactive()
@@ -112,21 +130,40 @@ p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "
   }
 }
 
+# One download with utils::download.file(mode = "wb"). Warnings are captured
+# and folded into the error when the download fails.
+.download_file <- function(url, dest, quiet) {
+  warns <- character()
+  fail <- function(msg) {
+    stop(msg, if (length(warns)) paste0(" [", paste(unique(warns), collapse = "; "), "]"),
+         call. = FALSE)
+  }
+  status <- tryCatch(
+    withCallingHandlers(
+      utils::download.file(url, dest, mode = "wb", quiet = quiet),
+      warning = function(w) {
+        warns <<- c(warns, conditionMessage(w))
+        invokeRestart("muffleWarning")
+      }),
+    error = function(e) fail(conditionMessage(e)))
+  if (!identical(as.numeric(status), 0)) fail(paste0("exit status ", status))
+  invisible(status)
+}
+
 # Downloads one manifest row into a temp file, verifies it and installs it in
 # the cache. Returns the installed path. A partial or unverified file never
 # reaches the final name.
 .download_fit <- function(row, quiet) {
   tmp <- tempfile(fileext = ".part")
   on.exit(unlink(tmp), add = TRUE)
-  res <- tryCatch(
-    utils::download.file(row$url, tmp, mode = "wb", quiet = quiet),
+  old <- options(timeout = max(getOption("timeout"), 3600))
+  on.exit(options(old), add = TRUE)
+  tryCatch(
+    .download_file(row$url, tmp, quiet),
     error = function(e) {
       stop("download of ", row$method, " ", row$set, " failed: ", conditionMessage(e), call. = FALSE)
     }
   )
-  if (!identical(res, 0L) && !identical(res, 0)) {
-    stop("download of ", row$method, " ", row$set, " failed (status ", res, ")", call. = FALSE)
-  }
 
   if (!.hash_matches(row, .file_hash(tmp))) {
     stop("checksum mismatch for the downloaded ", row$method, " ", row$set,
@@ -141,10 +178,12 @@ p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "
 
   # Stage in the destination directory (rename, else copy across devices)
   if (!file.rename(tmp, staged) && !file.copy(tmp, staged, overwrite = TRUE)) {
+    unlink(staged)
     stop("could not stage the ", row$method, " ", row$set, " fit in ", dir, call. = FALSE)
   }
   if (!file.rename(staged, final)) {
     if (!file.copy(staged, final, overwrite = TRUE)) {
+      unlink(final)
       stop("could not install the ", row$method, " ", row$set, " fit at ", final, call. = FALSE)
     }
   }
