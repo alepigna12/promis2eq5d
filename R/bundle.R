@@ -73,73 +73,94 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   f
 }
 
+# vs: a p2e_vs object used instead of p2e_value_set(target) (direct methods;
+#   target becomes vs$code). fold_id: precomputed folds (length nrow(train),
+#   values 1..K) instead of make_cv_folds(). fit_folds = FALSE: no fold fits
+#   (folds = list(), oof = NULL); a uses_oof method then fits the point model
+#   with oof = NULL (it computes its own residual pairs, used for the
+#   bootstrap pool) or, when B = 0, with oof = FALSE (core fit only).
 .fit_bundle <- function(method, train, set, target, variant, K, B, seed, Q = 50,
-                        progress = FALSE) {
+                        progress = FALSE, vs = NULL, fold_id = NULL, fit_folds = TRUE) {
   .require_pkgs(method$needs, paste0("fit ", method$id))
   say <- function(...) if (isTRUE(progress)) message(...)
   direct <- identical(method$family, "direct")
   uses_oof <- direct && isTRUE(method$uses_oof)
   n <- nrow(train)
 
-  vs <- NULL
   if (direct) {
-    vs <- p2e_value_set(target)
+    if (is.null(vs)) vs <- p2e_value_set(target)
+    else if (!inherits(vs, "p2e_vs")) stop("vs must be a p2e_vs object", call. = FALSE)
     train$y <- .score(as.matrix(train[DIMS]), vs)
+  } else {
+    vs <- NULL
   }
   y_profiles <- as.matrix(train[DIMS])
   storage.mode(y_profiles) <- "integer"
   dimnames(y_profiles) <- NULL
   state_freq <- tabulate(.state_index(y_profiles), 3125L)
 
-  fold_id <- make_cv_folds(train, v = K, seed = seed)$fold
+  if (is.null(fold_id)) {
+    fold_id <- make_cv_folds(train, v = K, seed = seed)$fold
+  } else {
+    if (length(fold_id) != n || anyNA(fold_id) || any(!fold_id %in% seq_len(K))) {
+      stop("fold_id must have length nrow(train) and values in 1..K", call. = FALSE)
+    }
+  }
   train$fold <- fold_id
 
   point <- NULL
-  if (!uses_oof) {
-    say("fitting the point model")
-    point <- .fit_required(method, set, "point fit",
-                           withr::with_seed(seed, method$fit(train, set, variant, NULL)))
-  }
-
-  say("fitting ", K, " fold models")
-  # oof = FALSE: no residual pairs needed, the fit is used for point predictions only
-  fold_oof <- if (uses_oof) FALSE else NULL
-  folds <- lapply(seq_len(K), function(k) {
-    .fit_required(method, set, paste0("fold ", k, " fit"),
-      withr::with_seed(seed + 1000L + k,
-                       method$fit(train[fold_id != k, , drop = FALSE], set, variant, fold_oof)))
-  })
-
-  say("computing out-of-fold predictions")
+  folds <- list()
+  oof <- NULL
   oof_pool <- NULL
-  if (direct) {
-    oof_mu <- numeric(n)
-    for (k in seq_len(K)) {
-      te <- fold_id == k
-      oof_mu[te] <- method$point(folds[[k]], train[te, , drop = FALSE])
-    }
-    oof <- list(mu = oof_mu)
-    if (uses_oof) oof_pool <- data.frame(oof_mu = oof_mu, oof_resid = train$y - oof_mu)
-  } else {
-    prof <- array(NA_integer_, c(n, Q, 5L))
-    for (k in seq_len(K)) {
-      te <- which(fold_id == k)
-      prof[te, , ] <- method$simulate(folds[[k]], train[te, , drop = FALSE], Q,
-                                      key = seq_along(te))
-    }
-    oof <- list(profiles = prof)
+  point_fit <- function(oof_arg) {
+    say("point fit")
+    .fit_required(method, set, "point fit",
+                  withr::with_seed(seed, method$fit(train, set, variant, oof_arg)))
   }
 
-  if (uses_oof) {
-    say("fitting the point model")
-    point <- .fit_required(method, set, "point fit",
-                           withr::with_seed(seed, method$fit(train, set, variant, oof_pool)))
+  if (!uses_oof) point <- point_fit(NULL)
+
+  if (fit_folds) {
+    # oof = FALSE: no residual pairs needed, the fit is used for point predictions only
+    fold_oof <- if (uses_oof) FALSE else NULL
+    folds <- lapply(seq_len(K), function(k) {
+      say("fold ", k, "/", K)
+      .fit_required(method, set, paste0("fold ", k, " fit"),
+        withr::with_seed(seed + 1000L + k,
+                         method$fit(train[fold_id != k, , drop = FALSE], set, variant, fold_oof)))
+    })
+
+    if (direct) {
+      oof_mu <- numeric(n)
+      for (k in seq_len(K)) {
+        te <- fold_id == k
+        oof_mu[te] <- method$point(folds[[k]], train[te, , drop = FALSE])
+      }
+      oof <- list(mu = oof_mu)
+      if (uses_oof) oof_pool <- data.frame(oof_mu = oof_mu, oof_resid = train$y - oof_mu)
+    } else {
+      prof <- array(NA_integer_, c(n, Q, 5L))
+      for (k in seq_len(K)) {
+        te <- which(fold_id == k)
+        prof[te, , ] <- method$simulate(folds[[k]], train[te, , drop = FALSE], Q,
+                                        key = seq_along(te))
+      }
+      oof <- list(profiles = prof)
+    }
+    if (uses_oof) point <- point_fit(oof_pool)
+  } else if (uses_oof) {
+    if (B > 0L) {
+      point <- point_fit(NULL)
+      oof_pool <- data.frame(oof_mu = point$oof_mu, oof_resid = point$oof_resid)
+    } else {
+      point <- point_fit(FALSE)
+    }
   }
 
   boot <- list()
   failed <- 0L
   for (b in seq_len(B)) {
-    say("bootstrap replicate ", b, " of ", B)
+    say("boot ", b, "/", B)
     f <- withr::with_seed(seed + b, {
       idx <- .boot_index(train$country, n)
       .try_fit(method, train[idx, , drop = FALSE], set, variant,

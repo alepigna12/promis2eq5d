@@ -1,0 +1,107 @@
+retrain_data <- function() make_synthetic_data(400, seed = 1, countries = c("DE", "UK"))
+retrain_item_data <- function() {
+  d <- retrain_data()
+  d[setdiff(names(d), TSCORES)]
+}
+quiet_retrain <- function(...) suppressMessages(.retrain_bundle(...))
+
+test_that("a T-score set needs tscore_table", {
+  withr::local_options(promis2eq5d.training_data = retrain_data(),
+                       promis2eq5d.cache_dir = withr::local_tempdir())
+  stand_in_bundle("D12_klapproth", "S3K", "UK")
+  expect_error(.retrain_bundle("D12_klapproth", "S3K", p2e_value_set("USA")),
+               "retrain on a T-score set needs tscore_table")
+})
+
+test_that("D03 retrain on an item set: target, boot, folds and caching", {
+  cdir <- withr::local_tempdir()
+  withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
+  shipped <- stand_in_bundle("D03_clad", "S1", "UK")
+  vs <- p2e_value_set("USA")
+  rb <- quiet_retrain("D03", "S1", vs, boot = 2, mode = "individual", cache = FALSE)
+  expect_s3_class(rb, "p2e_bundle")
+  expect_equal(rb$target, "US"); expect_equal(rb$vs$code, "US")
+  expect_length(rb$boot, 2); expect_length(rb$folds, 0)
+  expect_identical(rb$fold_id, shipped$fold_id)
+  expect_false(dir.exists(file.path(cdir, "retrain")))
+  # individual draws work without fold fits
+  nd <- retrain_item_data()[1:5, ]
+  m <- .p2e_method("D03")
+  expect_equal(dim(m$draw(rb$boot[[1]], nd, 3, key = 1:5, draw_type = NULL, lo = NULL)), c(5L, 3L))
+  expect_equal(dim(m$draw(rb$point, nd, 3, key = 1:5, draw_type = NULL, lo = NULL)), c(5L, 3L))
+
+  rbi <- quiet_retrain("D03", "S1", vs, boot = 0, interval = TRUE, mode = "individual", cache = FALSE)
+  expect_length(rbi$folds, 3); expect_length(rbi$boot, 0)
+  expect_length(rbi$oof$mu, 400)
+
+  quiet_retrain("D03", "S1", vs, boot = 2, mode = "individual", cache = TRUE)
+  expect_length(list.files(file.path(cdir, "retrain"), pattern = "[.]rds$"), 1)
+})
+
+test_that("a cached retrain is read back without refitting", {
+  cdir <- withr::local_tempdir()
+  withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
+  stand_in_bundle("D03_clad", "S1", "UK")
+  vs <- p2e_value_set("USA")
+  msgs <- testthat::capture_messages(
+    .retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE))
+  expect_true(any(grepl("point fit", msgs)))
+  expect_no_message(r2 <- .retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE))
+  expect_s3_class(r2, "p2e_bundle")
+  # a mean-only bundle has a different key and is not reused for draws
+  suppressMessages(.retrain_bundle("D03", "S1", vs, boot = 1, mode = "mean", cache = TRUE))
+  expect_length(list.files(file.path(cdir, "retrain")), 2)
+})
+
+test_that("a mean-only D03 retrain cannot draw", {
+  withr::local_options(promis2eq5d.training_data = retrain_item_data(),
+                       promis2eq5d.cache_dir = withr::local_tempdir())
+  stand_in_bundle("D03_clad", "S1", "UK")
+  rb <- quiet_retrain("D03", "S1", p2e_value_set("USA"), mode = "mean", cache = FALSE)
+  expect_length(rb$boot, 0)
+  nd <- retrain_item_data()[1:3, ]
+  expect_error(.p2e_method("D03")$draw(rb$point, nd, 2, key = 1:3, draw_type = NULL, lo = NULL),
+               "cannot draw")
+})
+
+test_that("response methods and bad arguments error", {
+  withr::local_options(promis2eq5d.training_data = retrain_item_data(),
+                       promis2eq5d.cache_dir = withr::local_tempdir())
+  vs <- p2e_value_set("USA")
+  expect_error(.retrain_bundle("R06", "S1", vs), "response method")
+  stand_in_bundle("D03_clad", "S1", "UK")
+  expect_error(.retrain_bundle("D03", "S1", "US"), "p2e_vs")
+  expect_error(.retrain_bundle("D03", "S1", vs, mode = "x"), "mode")
+  expect_error(.retrain_bundle("D03", "S1", vs, interval = NA), "interval")
+})
+
+test_that(".training_data errors clearly when nothing is available", {
+  withr::local_options(promis2eq5d.training_data = NULL)
+  skip_if(exists("p2e_training", envir = asNamespace("promis2eq5d"), inherits = FALSE))
+  expect_error(.training_data(), "training data")
+})
+
+test_that("fit_bundle: vs, fold_id and fit_folds", {
+  train <- make_synthetic_data(200, 1)
+  fid <- rep(1:3, length.out = 200)
+  vs <- p2e_value_set("USA")
+  b <- suppressMessages(.fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 2, 1,
+                                    vs = vs, fold_id = fid, fit_folds = FALSE, progress = TRUE))
+  expect_equal(b$target, "US"); expect_identical(b$fold_id, fid)
+  expect_length(b$folds, 0); expect_null(b$oof); expect_length(b$boot, 2)
+  expect_error(.fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 2, 1, fold_id = 1:5), "fold_id")
+  msgs <- testthat::capture_messages(
+    .fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 1, 1, progress = TRUE))
+  expect_equal(msgs, c("point fit\n", "fold 1/3\n", "fold 2/3\n", "fold 3/3\n", "boot 1/1\n"))
+})
+
+test_that("a T-score set retrains with a made-up table", {
+  withr::local_options(promis2eq5d.training_data = retrain_data(),
+                       promis2eq5d.cache_dir = withr::local_tempdir())
+  stand_in_bundle("D12_klapproth", "S3K", "UK")
+  doms <- c("PF", "ANX", "DEP", "FAT", "SLP", "SR", "PI")
+  tb <- do.call(rbind, lapply(seq_along(doms), function(i)
+    data.frame(domain = doms[i], raw = 0:40, tscore = 10 * i + (0:40) / 2)))
+  rb <- quiet_retrain("D12_klapproth", "S3K", p2e_value_set("USA"), tscore_table = tb, cache = FALSE)
+  expect_equal(rb$target, "US"); expect_length(rb$folds, 0); expect_length(rb$boot, 0)
+})
