@@ -1,4 +1,4 @@
-# Ported from iHEA_2027 R/functions/design.R at freeze-ihea2027-abstract-v3 (a79e102); changes: dropped load_model_data, target_utility, state_weights, make_cv_folds, loco_folds, make_cohorts and PF_BAND_CUTS; lasso_select keeps the gaussian branch only (other families error) and checks that glmnet is installed; added stats:: and splines:: namespacing; pipeline sourcing and library() calls removed; PREDICTOR_SETS, ITEMS and TSCORES come from constants.R
+# Ported from iHEA_2027 R/functions/design.R at freeze-ihea2027-abstract-v3 (a79e102); changes: dropped load_model_data, target_utility, state_weights, loco_folds, make_cohorts and PF_BAND_CUTS; lasso_select keeps the gaussian branch only (other families error) and checks that glmnet is installed; added stats:: and splines:: namespacing; pipeline sourcing and library() calls removed; make_cv_folds (ported verbatim, from R/functions/design.R) added back; PREDICTOR_SETS, ITEMS and TSCORES come from constants.R
 
 # Design matrices and lasso selection: the data layer shared by every mapping model.
 #
@@ -176,4 +176,26 @@ lasso_select <- function(X, y, family = "gaussian", foldid) {
   cv <- glmnet::cv.glmnet(X, y, family = family, foldid = foldid)
   b <- as.matrix(stats::coef(cv, s = "lambda.1se"))[-1, 1]
   names(b)[b != 0]
+}
+
+# ---- CV folds ---------------------------------------------------------------
+
+# v-fold assignment stratified by country x util_band. Within each stratum
+# (taken in sorted order) rows are shuffled with `seed` and given folds in
+# rotation, continuing the rotation across strata so fold sizes differ by at
+# most 1 overall and by at most 1 within every stratum.
+# Returns data.frame(ID, fold) in the row order of df.
+make_cv_folds <- function(df, v = 10, seed) {
+  stratum <- paste(df$country, df$util_band, sep = "|")
+  fold <- integer(nrow(df))
+  withr::with_seed(seed, {
+    offset <- 0L
+    for (s in sort(unique(stratum))) {
+      idx <- which(stratum == s)
+      idx <- idx[sample.int(length(idx))]
+      fold[idx] <- (offset + seq_along(idx) - 1L) %% v + 1L
+      offset <- offset + length(idx)
+    }
+  })
+  data.frame(ID = df$ID, fold = fold, stringsAsFactors = FALSE)
 }
