@@ -122,3 +122,15 @@ make_synthetic_data <- function(n = 400, seed = 1, countries = c("DE", "UK")) {
   rownames(out) <- NULL
   out[.SYN_COLS]
 }
+
+# A synthetic frame with the user-facing column names: HealthMeasures item IDs,
+# Global07 for P9 and age for AGE; the T-scores and female keep their names.
+# Internal-only columns (ID, country, E1-E5, ...) are dropped.
+user_frame <- function(df) {
+  out <- df[c(ITEMS, "P9", TSCORES, "AGE", "female")]
+  names(out)[match(ITEMS, names(out))] <- unname(ITEM_IDS)
+  names(out)[names(out) == "P9"] <- PAIN_ID
+  names(out)[names(out) == "AGE"] <- "age"
+  rownames(out) <- NULL
+  out
+}
