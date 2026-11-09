@@ -179,24 +179,35 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
 }
 
 # Looks for <method>_<set>_<target or "any">.rds in fit_dir, the installed
-# fits and the cache. Never downloads.
+# fits and the cache. Downloads only after an interactive yes (R09_chain).
 .load_bundle <- function(method, set, target) {
   file <- paste0(method, "_", set, "_", if (is.na(target)) "any" else target, ".rds")
   dirs <- c(getOption("promis2eq5d.fit_dir"),
             system.file("fits", package = "promis2eq5d"),
             file.path(.cache_dir(), "fits"))
   dirs <- dirs[nzchar(dirs)]
-  for (d in dirs) {
-    p <- file.path(d, file)
-    if (file.exists(p)) {
-      b <- readRDS(p)
-      if (!inherits(b, "p2e_bundle")) stop("'", p, "' is not a promis2eq5d fit bundle")
-      return(b)
+  find <- function() {
+    for (d in dirs) {
+      p <- file.path(d, file)
+      if (file.exists(p)) return(p)
     }
+    NULL
   }
-  hint <- if (identical(method, "R09_chain")) {
-    paste0("; run p2e_download('R09_chain', set = '", set, "')")
-  } else ""
-  stop("fit bundle '", file, "' not found (searched: ", paste(dirs, collapse = ", "), ")", hint,
-       call. = FALSE)
+  p <- find()
+  if (is.null(p) && identical(method, "R09_chain") && .is_interactive() &&
+      isTRUE(.ask_yes_no(paste0("Fit bundle '", file, "' is not installed. Download it now ",
+                                "with p2e_download()?")))) {
+    p2e_download(method, set)
+    p <- find()
+  }
+  if (is.null(p)) {
+    hint <- if (identical(method, "R09_chain")) {
+      paste0("; run p2e_download('R09_chain', set = '", set, "')")
+    } else ""
+    stop("fit bundle '", file, "' not found (searched: ", paste(dirs, collapse = ", "), ")", hint,
+         call. = FALSE)
+  }
+  b <- readRDS(p)
+  if (!inherits(b, "p2e_bundle")) stop("'", p, "' is not a promis2eq5d fit bundle")
+  b
 }
