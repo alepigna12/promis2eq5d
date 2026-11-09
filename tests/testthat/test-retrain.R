@@ -53,15 +53,17 @@ test_that("a cached retrain is read back without refitting", {
   expect_length(list.files(file.path(cdir, "retrain")), 2)
 })
 
-test_that("a mean-only D03 retrain cannot draw", {
+test_that("a mean-only D03 retrain can draw (it keeps its own residual pairs)", {
   withr::local_options(promis2eq5d.training_data = retrain_item_data(),
                        promis2eq5d.cache_dir = withr::local_tempdir())
   stand_in_bundle("D03_clad", "S1", "UK")
   rb <- quiet_retrain("D03", "S1", p2e_value_set("USA"), mode = "mean", cache = FALSE)
   expect_length(rb$boot, 0)
   nd <- retrain_item_data()[1:3, ]
-  expect_error(.p2e_method("D03")$draw(rb$point, nd, 2, key = 1:3, draw_type = NULL, lo = NULL),
-               "cannot draw")
+  expect_false(is.null(rb$point$oof_resid))
+  d <- .p2e_method("D03")$draw(rb$point, nd, 2, key = 1:3, draw_type = NULL, lo = NULL)
+  expect_equal(dim(d), c(3L, 2L))
+  expect_false(anyNA(d))
 })
 
 test_that("response methods and bad arguments error", {

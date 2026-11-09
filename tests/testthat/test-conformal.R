@@ -79,3 +79,9 @@ test_that("blocked and unblocked conformal intervals are identical", {
   testthat::local_mocked_bindings(CONFORMAL_BLOCK = 3L)
   expect_identical(.conformal(b, te, vs, 0.9), full)
 })
+
+test_that("a bundle with no fold fits cannot give conformal intervals", {
+  b <- stand_in_bundle("D12_klapproth", "S3K", "UK"); te <- make_synthetic_data(5, 2, countries = "UK")
+  b$folds <- list()
+  expect_error(.conformal(b, te, p2e_value_set("UK"), 0.9), "no fold fits.*interval = TRUE")
+})

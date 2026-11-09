@@ -40,6 +40,9 @@ CONFORMAL_BLOCK <- 500L
   if (!is.numeric(level) || length(level) != 1L || is.na(level) || level <= 0 || level >= 1) {
     stop("level must be a single number strictly between 0 and 1", call. = FALSE)
   }
+  if (length(bundle$folds) == 0L) {
+    stop("this bundle has no fold fits; refit with interval = TRUE", call. = FALSE)
+  }
   m <- .p2e_method(bundle$method)
   direct <- identical(m$family, "direct")
   if (direct) {

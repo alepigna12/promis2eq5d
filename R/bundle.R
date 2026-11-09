@@ -77,8 +77,8 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
 #   target becomes vs$code). fold_id: precomputed folds (length nrow(train),
 #   values 1..K) instead of make_cv_folds(). fit_folds = FALSE: no fold fits
 #   (folds = list(), oof = NULL); a uses_oof method then fits the point model
-#   with oof = NULL (it computes its own residual pairs, used for the
-#   bootstrap pool) or, when B = 0, with oof = FALSE (core fit only).
+#   with oof = NULL whatever B is (it computes its own residual pairs, used
+#   for the bootstrap pool and for drawing).
 .fit_bundle <- function(method, train, set, target, variant, K, B, seed, Q = 50,
                         progress = FALSE, vs = NULL, fold_id = NULL, fit_folds = TRUE) {
   .require_pkgs(method$needs, paste0("fit ", method$id))
@@ -149,12 +149,11 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
     }
     if (uses_oof) point <- point_fit(oof_pool)
   } else if (uses_oof) {
-    if (B > 0L) {
-      point <- point_fit(NULL)
-      oof_pool <- data.frame(oof_mu = point$oof_mu, oof_resid = point$oof_resid)
-    } else {
-      point <- point_fit(FALSE)
-    }
+    # the point fit computes its own residual pairs whatever B is, so a
+    # retrained uses_oof method can always draw (the D03 mean is Monte Carlo
+    # over the point fit's draws); the bootstrap pool is those pairs
+    point <- point_fit(NULL)
+    oof_pool <- data.frame(oof_mu = point$oof_mu, oof_resid = point$oof_resid)
   }
 
   boot <- list()
