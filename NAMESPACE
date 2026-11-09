@@ -4,3 +4,15 @@ S3method(print,p2e_vs)
 export(p2e_columns)
 export(p2e_tscores)
 export(p2e_value_set)
+importFrom(stats,
+  dlogis,
+  dnorm,
+  optim,
+  optimize,
+  plogis,
+  pnorm,
+  qnorm,
+  rnorm,
+  sd,
+  setNames
+)
