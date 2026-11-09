@@ -90,7 +90,7 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   if (direct) {
     if (is.null(vs)) vs <- p2e_value_set(target)
     else if (!inherits(vs, "p2e_vs")) stop("vs must be a p2e_vs object", call. = FALSE)
-    train$y <- .score(as.matrix(train[DIMS]), vs)
+    train[["y"]] <- .score(as.matrix(train[DIMS]), vs)
   } else {
     vs <- NULL
   }
@@ -101,12 +101,23 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
 
   if (is.null(fold_id)) {
     fold_id <- make_cv_folds(train, v = K, seed = seed)$fold
+    if (anyNA(fold_id) || any(!fold_id %in% seq_len(K)) || any(tabulate(fold_id, K) == 0L)) {
+      stop("the computed folds are not valid (values in 1..K, every fold non-empty): ",
+           "check that train has the country and util_band columns and enough rows for K = ", K,
+           call. = FALSE)
+    }
   } else {
     if (length(fold_id) != n || anyNA(fold_id) || any(!fold_id %in% seq_len(K))) {
       stop("fold_id must have length nrow(train) and values in 1..K", call. = FALSE)
     }
+    if (any(tabulate(fold_id, K) == 0L)) {
+      stop("fold_id must use every fold 1..K (a fold is empty)", call. = FALSE)
+    }
   }
-  train$fold <- fold_id
+  train[["fold"]] <- fold_id
+  if (!is.null(train[["country"]]) && anyNA(train[["country"]])) {
+    stop("train$country has missing values; the bootstrap is stratified by country", call. = FALSE)
+  }
 
   point <- NULL
   folds <- list()
@@ -137,13 +148,14 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
         oof_mu[te] <- method$point(folds[[k]], train[te, , drop = FALSE])
       }
       oof <- list(mu = oof_mu)
-      if (uses_oof) oof_pool <- data.frame(oof_mu = oof_mu, oof_resid = train$y - oof_mu)
+      if (uses_oof) oof_pool <- data.frame(oof_mu = oof_mu, oof_resid = train[["y"]] - oof_mu)
     } else {
       prof <- array(NA_integer_, c(n, Q, 5L))
       for (k in seq_len(K)) {
         te <- which(fold_id == k)
-        prof[te, , ] <- method$simulate(folds[[k]], train[te, , drop = FALSE], Q,
-                                        key = seq_along(te))
+        # seeded, so the profiles do not depend on (or advance) the caller's stream
+        prof[te, , ] <- withr::with_seed(seed + 2000L + k,
+          method$simulate(folds[[k]], train[te, , drop = FALSE], Q, key = seq_along(te)))
       }
       oof <- list(profiles = prof)
     }
@@ -161,7 +173,7 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   for (b in seq_len(B)) {
     say("boot ", b, "/", B)
     f <- withr::with_seed(seed + b, {
-      idx <- .boot_index(train$country, n)
+      idx <- .boot_index(train[["country"]], n)
       .try_fit(method, train[idx, , drop = FALSE], set, variant,
                if (uses_oof) oof_pool[idx, , drop = FALSE])
     })

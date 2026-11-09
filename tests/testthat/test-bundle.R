@@ -77,18 +77,20 @@ test_that("uses_oof: point gets the pairs, folds get FALSE, replicates get oof[i
   }
 })
 
+toy_resp_method <- function() list(
+  id = "toyr", family = "response", sets = "S4", variants = list(list()),
+  aliases = "toyr", needs = character(0), predict_needs = character(0),
+  fit = function(train, set, variant, oof = NULL) {
+    stopifnot(is.null(train$y))
+    list(set = set, variant = variant, n_train = nrow(train))
+  },
+  simulate = function(fit, newdata, M, key) {
+    array(sample(1:5, nrow(newdata) * M * 5, replace = TRUE), c(nrow(newdata), M, 5))
+  }
+)
+
 test_that("response methods give oof profiles and no target", {
-  toy_resp <- list(
-    id = "toyr", family = "response", sets = "S4", variants = list(list()),
-    aliases = "toyr", needs = character(0), predict_needs = character(0),
-    fit = function(train, set, variant, oof = NULL) {
-      stopifnot(is.null(train$y))
-      list(set = set, variant = variant, n_train = nrow(train))
-    },
-    simulate = function(fit, newdata, M, key) {
-      array(sample(1:5, nrow(newdata) * M * 5, replace = TRUE), c(nrow(newdata), M, 5))
-    }
-  )
+  toy_resp <- toy_resp_method()
   b <- .fit_bundle(toy_resp, make_synthetic_data(120, 2), "S4", NA, list(), 3, 2, 1, Q = 7)
   expect_true(is.na(b$target)); expect_null(b$vs)
   expect_equal(dim(b$oof$profiles), c(120L, 7L, 5L))
@@ -146,4 +148,32 @@ test_that("fit_info$converged = FALSE (no top-level converged) is honoured every
   expect_equal(b$boot_failed, 1L); expect_length(b$boot, 2)
   expect_true(.fit_converged(list()))
   expect_false(.fit_converged(list(fit_info = list(converged = NA))))
+})
+
+test_that("oof profiles of a response bundle are seeded and leave the caller's stream alone", {
+  tr <- make_synthetic_data(120, 2)
+  fit <- function() .fit_bundle(toy_resp_method(), tr, "S4", NA, list(), 3, 0, 4, Q = 6)
+  set.seed(1); b1 <- fit()
+  set.seed(2); before <- .Random.seed; b2 <- fit()
+  expect_identical(b1$oof$profiles, b2$oof$profiles)
+  expect_identical(.Random.seed, before)
+  # fold k is simulated under seed + 2000 + k
+  te <- which(b1$fold_id == 2L)
+  hand <- withr::with_seed(4 + 2000L + 2L, toy_resp_method()$simulate(NULL, tr[te, ], 6, seq_along(te)))
+  expect_identical(b1$oof$profiles[te, , ], hand)
+})
+
+test_that("fit_bundle validates the folds and the bootstrap strata", {
+  tr <- make_synthetic_data(120, 1)
+  fit <- function(train, ...) .fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 2, 1, ...)
+  nostrata <- tr[setdiff(names(tr), c("country", "util_band"))]
+  expect_error(make_cv_folds(nostrata, v = 3, seed = 1), "country")
+  expect_error(fit(nostrata), "country")
+  # folds that are valid in range but leave a fold empty
+  expect_error(fit(tr, fold_id = rep(1:2, length.out = 120)), "empty")
+  # too few rows for K folds
+  expect_error(fit(tr[1:2, ]), "util_band")
+  na_country <- tr; na_country$country[3] <- NA
+  expect_error(fit(na_country), "country.*missing")
+  expect_error(fit(na_country, fold_id = rep(1:3, length.out = 120)), "country.*missing")
 })

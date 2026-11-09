@@ -1,4 +1,4 @@
-# Ported from iHEA_2027 R/functions/design.R at freeze-ihea2027-abstract-v3 (a79e102); changes: .direct_design and .independent_cols added from R/functions/model_interface.R (lines 696-710 and the same file's .independent_cols; the lasso_dummies design for the direct methods); dropped load_model_data, target_utility, state_weights, loco_folds, make_cohorts and PF_BAND_CUTS; lasso_select keeps the gaussian branch only (other families error) and checks that glmnet is installed; added stats:: and splines:: namespacing; pipeline sourcing and library() calls removed; make_cv_folds (ported verbatim, from R/functions/design.R) added back; PREDICTOR_SETS, ITEMS and TSCORES come from constants.R
+# Ported from iHEA_2027 R/functions/design.R at freeze-ihea2027-abstract-v3 (a79e102); changes: .direct_design and .independent_cols added from R/functions/model_interface.R (lines 696-710 and the same file's .independent_cols; the lasso_dummies design for the direct methods); dropped load_model_data, target_utility, state_weights, loco_folds, make_cohorts and PF_BAND_CUTS; lasso_select keeps the gaussian branch only (other families error) and checks that glmnet is installed; added stats:: and splines:: namespacing; pipeline sourcing and library() calls removed; make_cv_folds (from R/functions/design.R, now an error without country and util_band) added back; PREDICTOR_SETS, ITEMS and TSCORES come from constants.R
 
 # Design matrices and lasso selection: the data layer shared by every mapping model.
 #
@@ -186,6 +186,9 @@ lasso_select <- function(X, y, family = "gaussian", foldid) {
 # most 1 overall and by at most 1 within every stratum.
 # Returns data.frame(ID, fold) in the row order of df.
 make_cv_folds <- function(df, v = 10, seed) {
+  if (is.null(df[["country"]]) && is.null(df[["util_band"]])) {
+    stop("make_cv_folds needs a country and/or a util_band column", call. = FALSE)
+  }
   stratum <- paste(df$country, df$util_band, sep = "|")
   fold <- integer(nrow(df))
   withr::with_seed(seed, {
