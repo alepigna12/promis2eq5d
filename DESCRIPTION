@@ -10,7 +10,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Imports: eq5d (>= 0.17.0), splines, stats, tools, utils, withr
-Suggests: glmnet, Matrix, ordinal, pbivnorm, quantreg, testthat (>= 3.2.0), xgboost
+Suggests: glmnet, MASS, Matrix, ordinal, pbivnorm, quantreg, testthat (>= 3.2.0), xgboost
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 Config/roxygen2/version: 8.1.0
