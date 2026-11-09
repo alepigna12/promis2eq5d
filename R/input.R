@@ -152,6 +152,11 @@ p2e_columns <- function() {
 
   if (!is.null(tscore_table) && all(ITEMS %in% names(std))) {
     ts <- .tscores_internal(std, tscore_table)
+    replaced <- intersect(TSCORES, names(std))
+    if (length(replaced)) {
+      warning("replacing the supplied column(s) ", paste(replaced, collapse = ", "),
+              " with T-scores computed from `tscore_table`.", call. = FALSE)
+    }
     for (nm in TSCORES) std[[nm]] <- ts[[nm]]
   }
   std
