@@ -150,7 +150,13 @@ p2e_columns <- function() {
   for (nm in names(out)) std[[nm]] <- out[[nm]]
   rownames(std) <- rownames(data)
 
-  if (!is.null(tscore_table) && all(ITEMS %in% names(std))) {
+  if (!is.null(tscore_table)) {
+    miss <- setdiff(ITEMS, names(std))
+    if (length(miss)) {
+      stop("a T-score table was given, so all 28 items are needed; missing item ",
+           "column(s): ", paste(vapply(miss, .user_name, character(1)), collapse = ", "),
+           ".", call. = FALSE)
+    }
     ts <- .tscores_internal(std, tscore_table)
     replaced <- intersect(TSCORES, names(std))
     if (length(replaced)) {

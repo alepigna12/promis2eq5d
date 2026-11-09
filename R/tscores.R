@@ -54,10 +54,14 @@ p2e_tscores <- function(data, table) {
   .tscores_internal(std, table)
 }
 
-# Compute the seven T-score columns from internal item names (P1_1 ...).
-# `std` is a data frame with the 28 ITEMS columns. Returns a data frame with
-# the TSCORES columns, one row per row of `std`.
-.tscores_internal <- function(std, table) {
+# Validate a user T-score table and return it as a plain data frame with
+# character `domain`. Errors name the problem; no row is silently dropped.
+.check_tscore_table <- function(table) {
+  if (!is.data.frame(table)) {
+    stop("the T-score table must be a data frame with columns domain, raw and tscore.",
+         call. = FALSE)
+  }
+  if (nrow(table) == 0) stop("the T-score table has no rows.", call. = FALSE)
   need <- c("domain", "raw", "tscore")
   miss <- setdiff(need, names(table))
   if (length(miss)) {
@@ -70,6 +74,32 @@ p2e_tscores <- function(data, table) {
     stop("the columns 'raw' and 'tscore' of the T-score table must be numeric.",
          call. = FALSE)
   }
+  na <- which(is.na(table$domain) | is.na(table$raw) | is.na(table$tscore))
+  if (length(na)) {
+    stop("the T-score table has missing values in domain, raw or tscore at ",
+         .row_text(na), ".", call. = FALSE)
+  }
+  bad <- setdiff(table$domain, names(PROMIS_DOMAINS))
+  if (length(bad)) {
+    stop("unknown domain(s) in the T-score table: ", paste(bad, collapse = ", "),
+         "; valid domains are ", paste(names(PROMIS_DOMAINS), collapse = ", "), ".",
+         call. = FALSE)
+  }
+  key <- paste(table$domain, table$raw)
+  dup <- table[duplicated(key), c("domain", "raw"), drop = FALSE]
+  if (nrow(dup)) {
+    pairs <- unique(paste(dup$domain, "raw", dup$raw))
+    stop(paste0("duplicate rows for ", pairs, collapse = "; "), " in the T-score table.",
+         call. = FALSE)
+  }
+  table
+}
+
+# Compute the seven T-score columns from internal item names (P1_1 ...).
+# `std` is a data frame with the 28 ITEMS columns. Returns a data frame with
+# the TSCORES columns, one row per row of `std`.
+.tscores_internal <- function(std, table) {
+  table <- .check_tscore_table(table)
   out <- data.frame(row.names = seq_len(nrow(std)))
   for (dm in names(PROMIS_DOMAINS)) {
     raw <- unname(rowSums(std[PROMIS_DOMAINS[[dm]]]))  # NA if any item is NA
