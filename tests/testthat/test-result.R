@@ -95,3 +95,22 @@ test_that("summary and as.matrix use the recorded id and group columns", {
   expect_equal(summary(coh), s_coh)
   expect_equal(as.matrix(coh), m_coh)
 })
+
+test_that("draw modes report the bootstrap counts in print and summary", {
+  r <- quiet(predict_eq5d(res_data(), "UK", mode = "individual", draws = 4, seed = 1))
+  i <- attr(r, "p2e_info")
+  expect_equal(i$boot_attempted, 4L); expect_equal(i$boot_failed, 0L)
+  out <- capture.output(print(r))
+  expect_true(any(grepl("bootstrap fits: 4 of 4 converged", out, fixed = TRUE)))
+  expect_equal(attr(summary(r), "boot_attempted"), 4L)
+  expect_equal(attr(summary(r), "boot_failed"), 0L)
+  # failures are subtracted
+  attr(r, "p2e_info")$boot_failed <- 1L
+  expect_true(any(grepl("bootstrap fits: 3 of 4 converged", capture.output(print(r)), fixed = TRUE)))
+  co <- quiet(predict_eq5d(res_data(), "UK", mode = "cohort", group = "arm", draws = 4, seed = 1))
+  expect_equal(attr(summary(co), "boot_attempted"), 4L)
+  # mean mode: no line, no attributes
+  rm <- quiet(predict_eq5d(res_data(), "UK"))
+  expect_false(any(grepl("bootstrap fits", capture.output(print(rm)))))
+  expect_null(attr(summary(rm), "boot_attempted"))
+})

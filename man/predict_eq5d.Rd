@@ -78,9 +78,14 @@ are an error with \code{within_id = "common"}.}
 }
 \value{
 A data frame of class \code{p2e_result} with the attribute \code{p2e_info}
-(method, family, set, value set, mode, draws, number of bootstrap fits,
+(method, family, set, value set, mode, draws, \code{B} (the number of bootstrap
+fits used), \code{boot_attempted} and \code{boot_failed} (the bootstrap fits
+attempted when the models were fitted, and those that failed or did not
+converge; intervals and draws are conditional on convergence),
 crosswalk source, retrain, draw type, \code{within_id}, seed and package
-version).
+version). In the draw modes \code{print()} reports the bootstrap counts and
+\code{summary()} carries them as the attributes \code{boot_attempted} and
+\code{boot_failed}.
 }
 \description{
 Maps PROMIS-29 profiles to EQ-5D-5L utilities, with uncertainty, under the
@@ -126,8 +131,11 @@ a CV+ conformal interval (\code{lower}, \code{upper}) at \code{level}, and with
 
 Draw d uses the same parameter draw (the same bootstrap fit) for every row,
 group and time point in a call. This keeps draws aligned for QALY
-calculations: use one call with \code{group}, or the same \code{seed} and \code{draws} in
-separate calls. \code{\link[=summary.p2e_result]{summary.p2e_result()}} and \code{\link[=as.matrix.p2e_result]{as.matrix.p2e_result()}} work on
+calculations: use one call with \code{group}, or separate calls with the same
+\code{draws}, which are aligned whatever the seed. Give separate calls different
+seeds (or none): with the same \code{seed}, rows in the same position of two
+calls share their individual random numbers, which understates the
+uncertainty of differences between them. \code{\link[=summary.p2e_result]{summary.p2e_result()}} and \code{\link[=as.matrix.p2e_result]{as.matrix.p2e_result()}} work on
 the draws.
 }
 
@@ -177,9 +185,9 @@ stay aligned across all rows in both settings.
 
 \section{Trademarks}{
 
-EQ-5D\Sexpr[results=rd]{"\\\\enc{™}{(TM)}"} is a trade mark of the EuroQol Research Foundation.
+EQ-5D\Sexpr[results=rd]{"\\\\enc{\u2122}{(TM)}"} is a trade mark of the EuroQol Research Foundation.
 
-PROMIS\Sexpr[results=rd]{"\\\\enc{®}{(R)}"} is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.
+PROMIS\Sexpr[results=rd]{"\\\\enc{\u00ae}{(R)}"} is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.
 }
 
 \examples{

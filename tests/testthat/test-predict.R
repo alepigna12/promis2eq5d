@@ -160,6 +160,8 @@ test_that("result attributes record the call", {
   expect_false(i$retrain); expect_equal(i$seed, 5)
   expect_equal(i$version, utils::packageVersion("promis2eq5d"))
   expect_equal(i$B, 4)
+  expect_equal(i$boot_attempted, 4L); expect_equal(i$boot_failed, 0L)
+  expect_identical(names(i)[match("B", names(i)) + 1:2], c("boot_attempted", "boot_failed"))
 })
 
 test_that("crosswalked direct mean is the mean of the crosswalked draws", {

@@ -41,6 +41,9 @@
 #'   one row per input row with `mean`, `sd`, `lower` and `upper`; cohort mode,
 #'   one row per group with `n`, `mean`, `lower` and `upper`. `as.matrix`
 #'   returns the draws (rows or groups by draws) and is an error in mean mode.
+#'   In the draw modes `print` shows "bootstrap fits: <converged> of
+#'   <attempted> converged" and `summary` carries the counts as the attributes
+#'   `boot_attempted` and `boot_failed`.
 #' @seealso [predict_eq5d()]
 #' @name p2e_result
 NULL
@@ -59,6 +62,10 @@ print.p2e_result <- function(x, n = 6, ...) {
   cat("route: ", .result_route(info), "\n", sep = "")
   cat("mode: ", info$mode, "\n", sep = "")
   cat("draws: ", if (is.na(info$draws)) "none (mean mode)" else info$draws, "\n", sep = "")
+  if (info$mode != "mean" && !is.na(info$boot_attempted)) {
+    cat("bootstrap fits: ", info$boot_attempted - info$boot_failed, " of ", info$boot_attempted,
+        " converged\n", sep = "")
+  }
   df <- .plain_result(x)
   print(utils::head(df, n))
   if (nrow(df) > n) cat("... with ", nrow(df) - n, " more rows\n", sep = "")
@@ -100,7 +107,7 @@ summary.p2e_result <- function(object, level = 0.90, ...) {
     out$lower <- unname(apply(u, 1, stats::quantile, a))
     out$upper <- unname(apply(u, 1, stats::quantile, 1 - a))
     rownames(out) <- NULL
-    return(out)
+    return(.with_boot_counts(out, info))
   }
   ix <- .cohort_index(df, cols$group)
   a <- (1 - COHORT_LEVEL) / 2
@@ -110,6 +117,13 @@ summary.p2e_result <- function(object, level = 0.90, ...) {
   out$lower <- unname(vapply(by_g, stats::quantile, numeric(1), a))
   out$upper <- unname(vapply(by_g, stats::quantile, numeric(1), 1 - a))
   rownames(out) <- NULL
+  .with_boot_counts(out, info)
+}
+
+# The bootstrap counts of a draw-mode summary, as attributes
+.with_boot_counts <- function(out, info) {
+  attr(out, "boot_attempted") <- info$boot_attempted
+  attr(out, "boot_failed") <- info$boot_failed
   out
 }
 

@@ -48,8 +48,11 @@ SET_DESCRIPTIONS <- c(
 #'
 #' Draw d uses the same parameter draw (the same bootstrap fit) for every row,
 #' group and time point in a call. This keeps draws aligned for QALY
-#' calculations: use one call with `group`, or the same `seed` and `draws` in
-#' separate calls. [summary.p2e_result()] and [as.matrix.p2e_result()] work on
+#' calculations: use one call with `group`, or separate calls with the same
+#' `draws`, which are aligned whatever the seed. Give separate calls different
+#' seeds (or none): with the same `seed`, rows in the same position of two
+#' calls share their individual random numbers, which understates the
+#' uncertainty of differences between them. [summary.p2e_result()] and [as.matrix.p2e_result()] work on
 #' the draws.
 #'
 #' @section Reaching your country:
@@ -123,9 +126,14 @@ SET_DESCRIPTIONS <- c(
 #' @param seed `NULL` or a number that makes the draws reproducible.
 #'
 #' @return A data frame of class `p2e_result` with the attribute `p2e_info`
-#'   (method, family, set, value set, mode, draws, number of bootstrap fits,
+#'   (method, family, set, value set, mode, draws, `B` (the number of bootstrap
+#'   fits used), `boot_attempted` and `boot_failed` (the bootstrap fits
+#'   attempted when the models were fitted, and those that failed or did not
+#'   converge; intervals and draws are conditional on convergence),
 #'   crosswalk source, retrain, draw type, `within_id`, seed and package
-#'   version).
+#'   version). In the draw modes `print()` reports the bootstrap counts and
+#'   `summary()` carries them as the attributes `boot_attempted` and
+#'   `boot_failed`.
 #' @seealso [p2e_columns()], [p2e_value_set()], [p2e_tscores()]
 #' @examples
 #' \dontrun{
@@ -229,6 +237,8 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
     method = m$id, family = m$family, set = set,
     value_set = list(code = vs$code, name = vs$name, version = vs$version, source = vs$source),
     mode = mode, draws = if (draw_mode) D else NA_integer_, B = length(bundle$boot),
+    boot_attempted = if (is.null(bundle$boot_attempted)) NA_integer_ else as.integer(bundle$boot_attempted),
+    boot_failed = if (is.null(bundle$boot_failed)) NA_integer_ else as.integer(bundle$boot_failed),
     crosswalk = if (is.null(knots)) NA_character_ else route$source,
     retrain = route$retrained, draw_type = draw_type, within_id = within_id,
     seed = if (is.null(seed)) NA else seed,
