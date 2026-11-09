@@ -1,4 +1,4 @@
-# Ported from iHEA_2027 R/functions/design.R at freeze-ihea2027-abstract-v3 (a79e102); changes: dropped load_model_data, target_utility, state_weights, loco_folds, make_cohorts and PF_BAND_CUTS; lasso_select keeps the gaussian branch only (other families error) and checks that glmnet is installed; added stats:: and splines:: namespacing; pipeline sourcing and library() calls removed; make_cv_folds (ported verbatim, from R/functions/design.R) added back; PREDICTOR_SETS, ITEMS and TSCORES come from constants.R
+# Ported from iHEA_2027 R/functions/design.R at freeze-ihea2027-abstract-v3 (a79e102); changes: .direct_design and .independent_cols added from R/functions/model_interface.R (lines 696-710 and the same file's .independent_cols; the lasso_dummies design for the direct methods); dropped load_model_data, target_utility, state_weights, loco_folds, make_cohorts and PF_BAND_CUTS; lasso_select keeps the gaussian branch only (other families error) and checks that glmnet is installed; added stats:: and splines:: namespacing; pipeline sourcing and library() calls removed; make_cv_folds (ported verbatim, from R/functions/design.R) added back; PREDICTOR_SETS, ITEMS and TSCORES come from constants.R
 
 # Design matrices and lasso selection: the data layer shared by every mapping model.
 #
@@ -198,4 +198,37 @@ make_cv_folds <- function(df, v = 10, seed) {
     }
   })
   data.frame(ID = df$ID, fold = fold, stringsAsFactors = FALSE)
+}
+
+# ---- direct-method design -----------------------------------------------------
+# (ported from iHEA_2027 R/functions/model_interface.R lines 696-710 at freeze-ihea2027-abstract-v3;
+# lasso_dummies is the "dummies" design with columns chosen by lasso_select())
+
+# Design of the direct methods for a D01 form: the build_design() matrix; for
+# lasso_dummies the item dummies kept by a gaussian lasso at lambda.1se over
+# train$fold. Exactly collinear columns are then dropped (.independent_cols:
+# pivoted QR with the intercept). Returns list(ref, design_form, cols, X) with
+# colnames(X) == cols; with no column left, X has 0 columns (intercept-only).
+.direct_design <- function(train, spec) {
+  form <- spec$variant$form
+  design_form <- if (form == "lasso_dummies") "dummies" else form
+  des <- build_design(train, spec$set, design_form)
+  cols <- colnames(des$X)
+  if (form == "lasso_dummies") {
+    if (is.null(train$fold)) stop("lasso_dummies needs train$fold")
+    cols <- lasso_select(des$X, train$y, "gaussian", train$fold)
+  }
+  X <- des$X[, cols, drop = FALSE]
+  keep <- .independent_cols(X)
+  list(ref = des$ref, design_form = design_form, cols = cols[keep], X = X[, keep, drop = FALSE])
+}
+
+# Positions (increasing) of the columns of X that are linearly independent
+# together with an intercept (pivoted QR of cbind(1, X)): constant and exactly
+# collinear columns are dropped. integer(0) when X has no column.
+.independent_cols <- function(X) {
+  if (!ncol(X)) return(integer(0))
+  q <- qr(cbind(1, X))
+  keep <- sort(q$pivot[seq_len(q$rank)])
+  keep[keep > 1] - 1L
 }

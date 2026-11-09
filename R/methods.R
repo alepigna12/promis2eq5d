@@ -1,12 +1,13 @@
 # Method registry. Each method file defines a constructor function only
 # (.method_R06(), .method_R09(), .method_D03(), .method_D12()); .onLoad() calls
 # .register_all_methods(), which registers every namespace function named
-# `.method_*`.
+# `.method_<id letter><digits>` (the constructors; helpers such as .method_variants() do not match).
 #
 # A method is a list:
 #   id, family            "R06_mvop_dim", "response" or "direct"
 #   sets                  supported predictor sets, preferred order first
-#   variants              list of variant lists; the first is the default
+#   variants              list of variant lists, or function(set) returning one; the first
+#                         is the default; resolve with .method_variants(m, set)
 #   aliases               alternative names, e.g. c("R06", "mvop")
 #   needs                 Suggests packages needed to FIT
 #   predict_needs         Suggests packages needed to PREDICT
@@ -37,13 +38,14 @@
   miss <- setdiff(need, names(m))
   if (length(miss)) stop("method is missing: ", paste(miss, collapse = ", "))
   if (!m$family %in% c("response", "direct")) stop("method family must be 'response' or 'direct'")
+  if (!is.list(m$variants) && !is.function(m$variants)) stop("method variants must be a list or a function of the set")
   assign(m$id, m, envir = .p2e_methods)
   invisible(m)
 }
 
 .register_all_methods <- function() {
   ns <- topenv(environment())
-  for (nm in ls(ns, pattern = "^\\.method_", all.names = TRUE)) {
+  for (nm in ls(ns, pattern = "^\\.method_[A-Z][0-9]", all.names = TRUE)) {
     f <- get(nm, envir = ns)
     if (is.function(f)) .register_p2e_method(f())
   }
@@ -59,4 +61,15 @@
   }
   stop("unknown method '", paste(format(id_or_alias), collapse = " "), "'; available methods: ",
        paste(names(ms), collapse = ", "), call. = FALSE)
+}
+
+# The variants of method m for predictor set `set`: m$variants(set) if it is a
+# function, else m$variants. Must be a non-empty list.
+.method_variants <- function(m, set) {
+  v <- if (is.function(m$variants)) m$variants(set) else m$variants
+  if (!is.list(v) || !length(v)) {
+    stop("method ", if (is.null(m$id)) "" else paste0("'", m$id, "' "),
+         "variants must be a non-empty list (or a function of the set returning one)", call. = FALSE)
+  }
+  v
 }
