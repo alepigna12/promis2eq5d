@@ -6,7 +6,9 @@
 #' allowed range of each, and the predictor sets that need each column. Item
 #' columns use the HealthMeasures item IDs. Pain intensity may also be given
 #' as `P9`, and age as `AGE`. Sex is given either as `female` (0/1) or as
-#' `sex` (for example `"F"`/`"M"` or `"female"`/`"male"`).
+#' `sex` (for example `"F"`/`"M"` or `"female"`/`"male"`; `"woman"`/`"man"` are also accepted, case-insensitive).
+#' Missing values are allowed in the data; they are an error only in a column
+#' of the predictor set that is used.
 #'
 #' @return A data frame with columns `column` (the name to use in your data),
 #'   `internal` (the name used inside the package), `type` (`"item"`,
@@ -45,7 +47,13 @@ p2e_columns <- function() {
     stop("column '", col, "' must be numeric (not ", class(x)[1], ").",
          call. = FALSE)
   }
-  as.numeric(x)
+  x <- as.numeric(x)
+  inf <- which(is.infinite(x))
+  if (length(inf)) {
+    stop("column '", col, "' has non-finite values at ", .row_text(inf), ".",
+         call. = FALSE)
+  }
+  x
 }
 
 .row_text <- function(i) {
@@ -101,12 +109,8 @@ p2e_columns <- function() {
   for (nm in ITEMS) {
     id <- ITEM_IDS[[nm]]
     if (!id %in% names(data)) next
-    x <- .check_range(.check_numeric(data[[id]], id), id, 1, 5, integer = TRUE)
-    if (anyNA(x)) {
-      stop("column '", id, "' has missing values at ", .row_text(which(is.na(x))),
-           "; items must be complete.", call. = FALSE)
-    }
-    out[[nm]] <- x
+    out[[nm]] <- .check_range(.check_numeric(data[[id]], id), id, 1, 5,
+                              integer = TRUE)
   }
 
   src <- .pick(data, PAIN_ID, "P9")
@@ -167,6 +171,23 @@ p2e_columns <- function() {
     stop("unknown method '", method, "'.", call. = FALSE)
   }
   avail <- .available_sets(std)
+  chosen <- .choose_set_name(method, info, std, set, avail)
+  for (v in PREDICTOR_SETS[[chosen]]) {
+    na <- which(is.na(std[[v]]))
+    if (length(na)) {
+      stop("column '", .user_name(v), "' has missing values at ", .row_text(na),
+           "; set ", chosen, " needs it complete.", call. = FALSE)
+    }
+  }
+  chosen
+}
+
+.user_name <- function(v) {
+  map <- c(ITEM_IDS, P9 = PAIN_ID, AGE = "age")
+  if (v %in% names(map)) map[[v]] else v
+}
+
+.choose_set_name <- function(method, info, std, set, avail) {
   if (!is.null(set)) {
     if (length(set) != 1 || !set %in% info$sets) {
       stop("set '", paste(set, collapse = ","), "' is not a predictor set of ",

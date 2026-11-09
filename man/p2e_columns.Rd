@@ -17,7 +17,9 @@ Lists the data columns that the prediction functions read, the type and
 allowed range of each, and the predictor sets that need each column. Item
 columns use the HealthMeasures item IDs. Pain intensity may also be given
 as \code{P9}, and age as \code{AGE}. Sex is given either as \code{female} (0/1) or as
-\code{sex} (for example \code{"F"}/\code{"M"} or \code{"female"}/\code{"male"}).
+\code{sex} (for example \code{"F"}/\code{"M"} or \code{"female"}/\code{"male"}; \code{"woman"}/\code{"man"} are also accepted, case-insensitive).
+Missing values are allowed in the data; they are an error only in a column
+of the predictor set that is used.
 }
 \examples{
 p2e_columns()
