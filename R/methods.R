@@ -16,7 +16,13 @@
 #                         fits, passes them to fit() of the point fit, and
 #                         passes oof[idx, ] to bootstrap replicate b, with the
 #                         indices idx that resample `train`. Fold fits get
-#                         oof = NULL. Direct methods only (D03).
+#                         oof = FALSE. Direct methods only (D03).
+#                         The oof argument of fit() means: a data.frame
+#                         (oof_mu, oof_resid) = use these residual pairs;
+#                         NULL = compute your own pairs (standalone fit, as in
+#                         the pipeline); FALSE = no pairs needed, the fit is
+#                         used for point predictions only (skip the nested
+#                         out-of-fold step).
 #   fit(train, set, variant, oof = NULL)    the fit list (+ $set, $variant);
 #                         may set $converged = FALSE. Direct methods find the
 #                         outcome in train$y; train has a `fold` column.

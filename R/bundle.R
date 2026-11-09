@@ -41,6 +41,16 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   if (is.null(f) || isFALSE(f$converged)) NULL else f
 }
 
+# Bootstrap row indices: resampled within each country (in sorted order) when
+# there is a country column, else simply. Uses the caller's RNG stream.
+.boot_index <- function(country, n) {
+  if (is.null(country)) return(sample.int(n, n, replace = TRUE))
+  unlist(lapply(sort(unique(country)), function(g) {
+    w <- which(country == g)
+    w[sample.int(length(w), length(w), replace = TRUE)]
+  }), use.names = FALSE)
+}
+
 .fit_bundle <- function(method, train, set, target, variant, K, B, seed, Q = 50,
                         progress = FALSE) {
   .require_pkgs(method$needs, paste0("fit ", method$id))
@@ -65,12 +75,15 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   point <- NULL
   if (!uses_oof) {
     say("fitting the point model")
-    point <- method$fit(train, set, variant, NULL)
+    point <- withr::with_seed(seed, method$fit(train, set, variant, NULL))
   }
 
   say("fitting ", K, " fold models")
+  # oof = FALSE: no residual pairs needed, the fit is used for point predictions only
+  fold_oof <- if (uses_oof) FALSE else NULL
   folds <- lapply(seq_len(K), function(k) {
-    method$fit(train[fold_id != k, , drop = FALSE], set, variant, NULL)
+    withr::with_seed(seed + 1000L + k,
+                     method$fit(train[fold_id != k, , drop = FALSE], set, variant, fold_oof))
   })
 
   say("computing out-of-fold predictions")
@@ -95,16 +108,18 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
 
   if (uses_oof) {
     say("fitting the point model")
-    point <- method$fit(train, set, variant, oof_pool)
+    point <- withr::with_seed(seed, method$fit(train, set, variant, oof_pool))
   }
 
   boot <- list()
   failed <- 0L
   for (b in seq_len(B)) {
     say("bootstrap replicate ", b, " of ", B)
-    idx <- withr::with_seed(seed + b, sample.int(n, n, replace = TRUE))
-    f <- .try_fit(method, train[idx, , drop = FALSE], set, variant,
-                  if (uses_oof) oof_pool[idx, , drop = FALSE])
+    f <- withr::with_seed(seed + b, {
+      idx <- .boot_index(train$country, n)
+      .try_fit(method, train[idx, , drop = FALSE], set, variant,
+               if (uses_oof) oof_pool[idx, , drop = FALSE])
+    })
     if (is.null(f)) failed <- failed + 1L else boot[[length(boot) + 1L]] <- f
   }
   if (B > 0L && !length(boot)) stop("all ", B, " bootstrap replicates failed for ", method$id)

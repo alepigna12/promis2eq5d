@@ -20,36 +20,61 @@ test_that("a missing Suggests package is an install hint", {
   expect_error(.fit_bundle(m, make_synthetic_data(50, 1), "S4", "UK", list(), 3, 2, 1), "notapkg.*install")
 })
 
-test_that("oof and bootstrap use the documented folds and indices", {
+test_that("oof and bootstrap use the documented folds and seeds", {
   train <- make_synthetic_data(200, 1)
   b <- .fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 2, 7)
   expect_equal(b$fold_id, make_cv_folds(train, v = 3, seed = 7)$fold)
   # oof$mu is the prediction of the fold fit that left the row out
-  y <- .score(as.matrix(train[DIMS]), b$vs)
   k <- 2L; te <- b$fold_id == k
-  expect_equal(b$oof$mu[te], as.numeric(predict(b$folds[[k]]$model, train[te, PREDICTOR_SETS$S4])))
-  # bootstrap b resamples rows with sample.int under seed + b
-  idx <- withr::with_seed(7 + 1, sample.int(200, 200, replace = TRUE))
-  expect_equal(b$boot[[1]]$n_train, 200L)
-  tr <- train; tr$y <- y
-  expect_equal(unname(coef(b$boot[[1]]$model)),
-               unname(coef(lm(y ~ ., data = cbind(tr[idx, PREDICTOR_SETS$S4], y = y[idx])))))
-  # no oof for methods that do not ask for it
-  expect_null(b$point$oof_given)
+  pred <- as.numeric(cbind(1, as.matrix(train[te, PREDICTOR_SETS$S4])) %*% b$folds[[k]]$coef)
+  expect_equal(b$oof$mu[te], pred)
+  # fits run under their own seeds: point seed, fold seed + 1000 + k, boot seed + b
+  expect_equal(b$point$draw_probe, withr::with_seed(7, stats::runif(1)))
+  expect_equal(b$folds[[k]]$draw_probe, withr::with_seed(7 + 1000L + k, stats::runif(1)))
+  idx <- withr::with_seed(7 + 1, {
+    cc <- train$country
+    out <- unlist(lapply(sort(unique(cc)), function(g) { w <- which(cc == g); w[sample.int(length(w), length(w), replace = TRUE)] }))
+    out
+  })
+  expect_equal(b$boot[[1]]$ids, train$ID[idx])
+  expect_equal(b$boot[[1]]$draw_probe, withr::with_seed(7 + 1, {
+    cc <- train$country
+    for (g in sort(unique(cc))) { w <- which(cc == g); sample.int(length(w), length(w), replace = TRUE) }
+    stats::runif(1)
+  }))
 })
 
-test_that("uses_oof passes oof to the point fit and resampled oof to replicates", {
+test_that("bootstrap keeps the country counts", {
+  train <- make_synthetic_data(200, 1, countries = c("DE", "UK"))
+  b <- .fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 3, 1)
+  for (f in b$boot) {
+    expect_equal(table(substr(f$ids, 1, 2))[c("DE", "UK")], table(train$country)[c("DE", "UK")])
+  }
+})
+
+test_that("the same seed gives the same bundle, and toy bundles save silently", {
+  train <- make_synthetic_data(150, 3)
+  b1 <- .fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 3, 5)
+  b2 <- .fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 3, 5)
+  expect_identical(b1$boot, b2$boot); expect_identical(b1$oof, b2$oof)
+  expect_identical(b1$folds, b2$folds)
+  expect_silent(saveRDS(b1, tempfile()))
+})
+
+test_that("uses_oof: point gets the pairs, folds get FALSE, replicates get oof[idx, ]", {
   train <- make_synthetic_data(200, 1)
   b <- .fit_bundle(toy_method(uses_oof = TRUE), train, "S4", "UK", list(), 3, 2, 7)
   o <- b$point$oof_given
+  expect_s3_class(o, "data.frame"); expect_equal(nrow(o), 200L)
   expect_named(o, c("oof_mu", "oof_resid"))
   y <- .score(as.matrix(train[DIMS]), b$vs)
   expect_equal(o$oof_mu, b$oof$mu)
   expect_equal(o$oof_resid, y - b$oof$mu)
-  expect_null(b$folds[[1]]$oof_given)
-  idx <- withr::with_seed(7 + 2, sample.int(200, 200, replace = TRUE))
-  expect_equal(b$boot[[2]]$oof_given$oof_mu, o$oof_mu[idx])
-  expect_equal(b$boot[[2]]$oof_given$oof_resid, o$oof_resid[idx])
+  for (f in b$folds) expect_identical(f$oof_given, FALSE)
+  for (f in b$boot) {
+    idx <- match(f$ids, train$ID)
+    expect_equal(f$oof_given, o[idx, ], ignore_attr = TRUE)
+  }
 })
 
 test_that("response methods give oof profiles and no target", {
@@ -82,8 +107,7 @@ test_that("the registry resolves ids and aliases and lists methods on error", {
 test_that("a stored bundle loads from fit_dir and cache_dir", {
   b <- .fit_bundle(toy_method(), make_synthetic_data(60, 1), "S4", "UK", list(), 3, 2, 1)
   d <- tempfile(); dir.create(d); dir.create(file.path(d, "fits"))
-  # the toy lm keeps its formula environment, which refers to the loaded package
-  suppressWarnings(saveRDS(b, file.path(d, "fits", "toy_S4_UK.rds")))
+  saveRDS(b, file.path(d, "fits", "toy_S4_UK.rds"))
   withr::local_options(promis2eq5d.fit_dir = NULL, promis2eq5d.cache_dir = d)
   expect_s3_class(.load_bundle("toy", "S4", "UK"), "p2e_bundle")
   expect_equal(.cache_dir(), d)

@@ -18,14 +18,16 @@ toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3) {
       if (!is.null(fail_on) && !uses_oof && calls$n == 1L + K + fail_on) {
         stop("toy fit failed on purpose")
       }
-      d <- train[cols]; d$y <- train$y
-      m <- stats::lm(y ~ ., data = d)
-      list(model = m, sd = stats::sigma(m), set = set, variant = variant, oof_given = oof,
-           n_train = nrow(train))
+      # lm.fit on a plain matrix: the fit holds no environments, so it saves silently
+      X <- cbind(1, as.matrix(train[cols]))
+      m <- stats::lm.fit(X, train$y)
+      list(coef = unname(m$coefficients), sd = sqrt(sum(m$residuals^2) / max(1, nrow(X) - ncol(X))),
+           set = set, variant = variant, oof_given = oof, ids = train$ID,
+           n_train = nrow(train), draw_probe = stats::runif(1))
     },
-    point = function(fit, newdata) as.numeric(stats::predict(fit$model, newdata[cols])),
+    point = function(fit, newdata) as.numeric(cbind(1, as.matrix(newdata[cols])) %*% fit$coef),
     draw = function(fit, newdata, M, key, draw_type, lo) {
-      mu <- as.numeric(stats::predict(fit$model, newdata[cols]))
+      mu <- as.numeric(cbind(1, as.matrix(newdata[cols])) %*% fit$coef)
       mu + matrix(stats::rnorm(length(mu) * M, 0, fit$sd), length(mu), M)
     }
   )
