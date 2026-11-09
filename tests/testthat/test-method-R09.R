@@ -39,23 +39,53 @@ test_that("R09 mean utility lies in [min, 1], is deterministic and leaves the ca
   expect_identical(u1, m$mean_utility(b$point, nd, vs))
   expect_true(all(u1 >= .vs_min(vs) & u1 <= 1))
 })
-test_that("R09 keyed simulation with key = seq_len(n) draws one n x M block of uniforms per chain step", {
+test_that("R09 simulate with key = seq_len(n) matches a step-by-step reference using the pipeline's RNG layout", {
   skip_if_not_installed("xgboost")
-  b <- stand_in_bundle("R09_chain", "S3"); nd <- make_synthetic_data(4, 2); M <- 5
-  a <- withr::with_seed(5, .p2e_method("R09")$simulate(b$point, nd, M, key = 1:4))
-  U1 <- withr::with_seed(5, matrix(runif(4 * M), 4, M))     # first chain step is E4
-  X <- .r09_x(nd, "S3")
-  p <- .r09_cond(b$point, 1L, X, matrix(0, 4, 0))
-  lvl <- matrix(1L, 4, M)
-  for (j in 1:4) lvl <- lvl + (U1 > matrix(t(apply(p, 1, cumsum))[, j], 4, M))
-  expect_identical(a[, , 4], lvl)
+  b <- stand_in_bundle("R09_chain", "S3"); f <- b$point; nd <- make_synthetic_data(4, 2); n <- 4L; M <- 6L
+  a <- withr::with_seed(5, .p2e_method("R09")$simulate(f, nd, M, key = 1:n))
+  ref <- withr::with_seed(5, {
+    X <- .r09_x(nd, f$set); Xr <- X[rep(seq_len(n), M), , drop = FALSE]
+    lv <- matrix(0L, n * M, 5)                     # chain order; row (i, m) = i + n * (m - 1)
+    for (k in 1:5) {
+      u <- matrix(runif(n * M), n, M)
+      p <- .r09_cond(f, k, Xr, lv[, seq_len(k - 1L), drop = FALSE])
+      cp <- t(apply(p, 1, cumsum))
+      lv[, k] <- 1L + rowSums(as.vector(u) > cp[, 1:4])
+    }
+    lv
+  })
+  expect_identical(a, array(as.integer(ref[, match(DIMS, f$order)]), c(n, M, 5)))
+})
+test_that("R09 handles a single-row newdata", {
+  skip_if_not_installed("xgboost")
+  b <- stand_in_bundle("R09_chain", "S3"); nd <- make_synthetic_data(2, 2)[1, , drop = FALSE]
+  vs <- p2e_value_set("USA"); m <- .p2e_method("R09")
+  expect_equal(dim(withr::with_seed(1, m$simulate(b$point, nd, 4, key = 1L))), c(1L, 4L, 5L))
+  mg <- m$marginals(b$point, nd)
+  expect_length(mg, 5L)
+  for (d in mg) { expect_equal(dim(d), c(1L, 5L)); expect_equal(unname(rowSums(d)), 1) }
+  u <- m$mean_utility(b$point, nd, vs)
+  expect_length(u, 1L); expect_true(is.finite(u) && u >= .vs_min(vs) && u <= 1)
+})
+test_that("R09 blocked Monte Carlo mean: deterministic, shaped, and equal to the unblocked run within one block", {
+  skip_if_not_installed("xgboost")
+  b <- stand_in_bundle("R09_chain", "S3"); f <- b$point; nd <- make_synthetic_data(12, 2)
+  vs <- p2e_value_set("USA")
+  u3 <- .r09_mean_utility(f, nd, vs, block = 5L)
+  expect_length(u3, 12L); expect_identical(u3, .r09_mean_utility(f, nd, vs, block = 5L))
+  mg3 <- .r09_marginals(f, nd, block = 5L)
+  for (d in mg3) { expect_equal(dim(d), c(12L, 5L)); expect_equal(unname(rowSums(d)), rep(1, 12)) }
+  expect_identical(.r09_mean_utility(f, nd, vs, block = 12L), .r09_mean_utility(f, nd, vs, block = 500L))
+  ref <- withr::with_seed(MC_SEED, .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+                          .rng_sample_kind = "Rejection",
+                          rowMeans(.score(.r09_simulate(f, nd, N_MC_MEAN, 1:12), vs)))
+  expect_identical(.r09_mean_utility(f, nd, vs), ref)
 })
 test_that("a saved R09 bundle is small, and reloading it simulates identically (raw boosters)", {
   skip_if_not_installed("xgboost")
   b <- stand_in_bundle("R09_chain", "S3"); nd <- make_synthetic_data(5, 2)
   f <- file.path(getOption("promis2eq5d.fit_dir"), "R09_chain_S3_any.rds")
   expect_true(file.exists(f))
-  message("R09 stand-in bundle size: ", file.size(f), " bytes")
   expect_lt(file.size(f), 5e6)
   b2 <- readRDS(f); m <- .p2e_method("R09")
   expect_true(is.raw(b2$point$dims$E1$raw))

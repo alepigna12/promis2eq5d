@@ -1,4 +1,4 @@
-# Ported from iHEA_2027 R/functions/models/R09_chain.R at freeze-ihea2027-abstract-v3 (a79e102); changes: constructor .method_R09() instead of register_method(); ML_THREADS replaced by the literal nthread = 1; ml_configs and the variant search not ported (variants[[1]] is a stand-in, Plan 2 supplies the selected variant); .r09_state_probs, .r09_profile_prob and R09_CHUNK not ported (R09_EXACT_MEAN = FALSE is in constants.R); fit() adds $set and $variant; each booster is stored as xgboost's portable raw model (ubj) and rebuilt for prediction (.r09_boosters), so a saved fit loads across xgboost versions and holds no external pointer; simulate() takes a key (K units, uniforms matrix(runif(K * M), K, M)[key, ]; key = seq_len(n) consumes the RNG as the pipeline); mean_utility() takes a p2e_vs value set and runs under withr::with_seed(MC_SEED) with pinned RNG kinds; marginals() added (level frequencies of the same N_MC_MEAN profiles); the conditional probabilities, chain order and sparse-level handling unchanged
+# Ported from iHEA_2027 R/functions/models/R09_chain.R at freeze-ihea2027-abstract-v3 (a79e102); changes: constructor .method_R09() instead of register_method(); ML_THREADS replaced by the literal nthread = 1; ml_configs and the variant search not ported (variants[[1]] is a stand-in, Plan 2 supplies the selected variant); .r09_state_probs, .r09_profile_prob and R09_CHUNK not ported (R09_EXACT_MEAN = FALSE is in constants.R); fit() adds $set and $variant; each booster is stored as xgboost's portable raw model (ubj) and rebuilt for prediction (.r09_boosters), so a saved fit loads across xgboost versions and holds no external pointer; simulate() takes a key (K units, uniforms matrix(runif(K * M), K, M)[key, ]; key = seq_len(n) consumes the RNG as the pipeline); mean_utility() takes a p2e_vs value set and runs under withr::with_seed(MC_SEED) with pinned RNG kinds; marginals() added (level frequencies of the same N_MC_MEAN profiles); mean_utility() and marginals() process rows in blocks of R09_MEAN_BLOCK = 500 inside one MC_SEED stream (the Monte Carlo stream differs from an unblocked run for n > 500; simulate() is unchanged, and simulate with key = seq_len(n) is the pipeline-equivalent path); the conditional probabilities, chain order and sparse-level handling unchanged
 
 # R09: classifier chain (xgboost, objective multi:softprob, num_class 5;
 # spec §5.2, R9). In the fixed order R09_ORDER, E4 -> E1 -> E3 -> E2 -> E5,
@@ -21,7 +21,7 @@
 # Rebuilding a 6 MB booster costs about 0.03 s, small against a prediction,
 # so the five are rebuilt per call and not cached.
 # Predictions: mean_utility and marginals use the Monte Carlo mean of
-# N_MC_MEAN simulated profiles. simulate is sequential: in chain order, one
+# N_MC_MEAN simulated profiles (blocks of R09_MEAN_BLOCK rows). simulate is sequential: in chain order, one
 # n x M block of uniforms per dimension, each draw cut at the conditional of
 # its own sampled earlier levels (predicted once per distinct person x
 # earlier levels).
@@ -44,20 +44,44 @@ R09_ORDER <- c("E4", "E1", "E3", "E2", "E5")
       f
     },
     simulate = function(fit, newdata, M, key) .r09_simulate(fit, newdata, M, key),
-    mean_utility = function(fit, newdata, vs) {
-      if (!inherits(vs, "p2e_vs")) stop("vs must be a p2e_vs value set")
-      n <- nrow(newdata)
-      .r09_mc(function() rowMeans(.score(.r09_simulate(fit, newdata, N_MC_MEAN, seq_len(n)), vs)))
-    },
-    marginals = function(fit, newdata) {
-      n <- nrow(newdata)
-      prof <- .r09_mc(function() .r09_simulate(fit, newdata, N_MC_MEAN, seq_len(n)))
-      stats::setNames(lapply(seq_along(DIMS), function(d) {
-        p <- vapply(1:5, function(l) rowMeans(prof[, , d] == l), numeric(n))
-        matrix(p, n, 5)
-      }), DIMS)
-    }
+    mean_utility = function(fit, newdata, vs) .r09_mean_utility(fit, newdata, vs),
+    marginals = function(fit, newdata) .r09_marginals(fit, newdata)
   )
+}
+
+# Rows per block of the Monte Carlo mean (mirrors MVOP_MEAN_BLOCK of R06):
+# n x N_MC_MEAN x 5 at once would be gigabytes for thousands of rows
+R09_MEAN_BLOCK <- 500L
+
+# Monte Carlo mean utility: blocks of rows in one MC_SEED stream, keeping only
+# the row means (key = seq_len(rows of the block))
+.r09_mean_utility <- function(fit, newdata, vs, block = R09_MEAN_BLOCK) {
+  if (!inherits(vs, "p2e_vs")) stop("vs must be a p2e_vs value set")
+  n <- nrow(newdata)
+  u <- numeric(n)
+  .r09_mc(function() {
+    for (b in split(seq_len(n), ceiling(seq_len(n) / block))) {
+      prof <- .r09_simulate(fit, newdata[b, , drop = FALSE], N_MC_MEAN, seq_along(b))
+      u[b] <<- rowMeans(matrix(.score(prof, vs), length(b)))
+    }
+  })
+  u
+}
+
+# Per-dimension level frequencies of the same blocked Monte Carlo profiles
+.r09_marginals <- function(fit, newdata, block = R09_MEAN_BLOCK) {
+  n <- nrow(newdata)
+  out <- lapply(DIMS, function(d) matrix(0, n, 5))
+  .r09_mc(function() {
+    for (b in split(seq_len(n), ceiling(seq_len(n) / block))) {
+      prof <- .r09_simulate(fit, newdata[b, , drop = FALSE], N_MC_MEAN, seq_along(b))
+      for (d in seq_along(DIMS)) {
+        lv <- matrix(prof[, , d], length(b), N_MC_MEAN)
+        for (l in 1:5) out[[d]][b, l] <<- rowMeans(lv == l)
+      }
+    }
+  })
+  stats::setNames(out, DIMS)
 }
 
 # Runs f under the fixed Monte Carlo seed with pinned RNG kinds, leaving the
