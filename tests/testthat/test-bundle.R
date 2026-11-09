@@ -112,3 +112,24 @@ test_that("a stored bundle loads from fit_dir and cache_dir", {
   expect_s3_class(.load_bundle("toy", "S4", "UK"), "p2e_bundle")
   expect_equal(.cache_dir(), d)
 })
+
+test_that("non-converged or failing point and fold fits stop the bundle", {
+  tr <- make_synthetic_data(120, 1)
+  # call 1 = point fit, call 1 + k = fold k
+  expect_error(.fit_bundle(toy_method(bad_call = 3), tr, "S4", "UK", list(), 3, 0, 1),
+               "toy.*S4.*fold 2 fit did not converge")
+  expect_error(.fit_bundle(toy_method(err_call = 1), tr, "S4", "UK", list(), 3, 0, 1),
+               "point fit failed.*errored on purpose")
+  expect_error(.fit_bundle(toy_method(bad_call = 1), tr, "S4", "UK", list(), 3, 0, 1),
+               "point fit did not converge")
+  expect_error(.fit_bundle(toy_method(err_call = 3), tr, "S4", "UK", list(), 3, 0, 1),
+               "fold 2 fit failed")
+  # uses_oof: the folds come first, the point fit is call K + 1
+  expect_error(.fit_bundle(toy_method(uses_oof = TRUE, bad_call = 4), tr, "S4", "UK", list(), 3, 0, 1),
+               "point fit did not converge")
+  expect_error(.fit_bundle(toy_method(uses_oof = TRUE, bad_call = 2), tr, "S4", "UK", list(), 3, 0, 1),
+               "fold 2 fit did not converge")
+})
+test_that("the shipped methods resolve through the registry", {
+  for (id in c("R06_mvop_dim", "R09_chain", "D03_clad")) expect_identical(.p2e_method(id)$id, id)
+})

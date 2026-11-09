@@ -5,7 +5,7 @@
 # 1 + K + b) and errors on bootstrap replicate `fail_on`. With uses_oof = TRUE
 # the point fit is made after the folds and the oof it receives is kept in
 # fit$oof_given.
-toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3) {
+toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3, bad_call = NULL, err_call = NULL) {
   calls <- new.env()
   calls$n <- 0L
   cols <- PREDICTOR_SETS$S4
@@ -15,6 +15,7 @@ toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3) {
     uses_oof = uses_oof,
     fit = function(train, set, variant, oof = NULL) {
       calls$n <- calls$n + 1L
+      if (!is.null(err_call) && calls$n == err_call) stop("toy fit errored on purpose")
       if (!is.null(fail_on) && !uses_oof && calls$n == 1L + K + fail_on) {
         stop("toy fit failed on purpose")
       }
@@ -23,7 +24,8 @@ toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3) {
       m <- stats::lm.fit(X, train$y)
       list(coef = unname(m$coefficients), sd = sqrt(sum(m$residuals^2) / max(1, nrow(X) - ncol(X))),
            set = set, variant = variant, oof_given = oof, ids = train$ID,
-           n_train = nrow(train), draw_probe = stats::runif(1))
+           n_train = nrow(train), draw_probe = stats::runif(1),
+           converged = !(!is.null(bad_call) && calls$n == bad_call))
     },
     point = function(fit, newdata) as.numeric(cbind(1, as.matrix(newdata[cols])) %*% fit$coef),
     draw = function(fit, newdata, M, key, draw_type, lo) {
@@ -47,7 +49,7 @@ stand_in_bundle <- function(method, set, target = NA) {
   if (is.null(.stand_in_env[[key]])) {
     m <- .p2e_method(method)
     train <- make_synthetic_data(400, seed = 1, countries = c("DE", "UK"))
-    b <- .fit_bundle(m, train, set, target, .method_variants(m, set)[[1]], K = 3, B = 4, seed = 1)
+    b <- .fit_bundle(m, train, set, target, .p2e_method_variants(m, set)[[1]], K = 3, B = 4, seed = 1)
     saveRDS(b, file.path(.stand_in_env$dir, paste0(key, ".rds")))
     .stand_in_env[[key]] <- b
   }

@@ -51,6 +51,19 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   }), use.names = FALSE)
 }
 
+# The point and fold fits must fit and converge (as the pipeline's
+# .checked_fit): an error from fit() or converged = FALSE stops with the
+# method, set and which fit failed
+.fit_required <- function(method, set, what, expr) {
+  f <- tryCatch(expr, error = function(e) {
+    stop(method$id, " (set ", set, "): ", what, " failed: ", conditionMessage(e), call. = FALSE)
+  })
+  if (isFALSE(f$converged)) {
+    stop(method$id, " (set ", set, "): ", what, " did not converge", call. = FALSE)
+  }
+  f
+}
+
 .fit_bundle <- function(method, train, set, target, variant, K, B, seed, Q = 50,
                         progress = FALSE) {
   .require_pkgs(method$needs, paste0("fit ", method$id))
@@ -75,15 +88,17 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   point <- NULL
   if (!uses_oof) {
     say("fitting the point model")
-    point <- withr::with_seed(seed, method$fit(train, set, variant, NULL))
+    point <- .fit_required(method, set, "point fit",
+                           withr::with_seed(seed, method$fit(train, set, variant, NULL)))
   }
 
   say("fitting ", K, " fold models")
   # oof = FALSE: no residual pairs needed, the fit is used for point predictions only
   fold_oof <- if (uses_oof) FALSE else NULL
   folds <- lapply(seq_len(K), function(k) {
-    withr::with_seed(seed + 1000L + k,
-                     method$fit(train[fold_id != k, , drop = FALSE], set, variant, fold_oof))
+    .fit_required(method, set, paste0("fold ", k, " fit"),
+      withr::with_seed(seed + 1000L + k,
+                       method$fit(train[fold_id != k, , drop = FALSE], set, variant, fold_oof)))
   })
 
   say("computing out-of-fold predictions")
@@ -108,7 +123,8 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
 
   if (uses_oof) {
     say("fitting the point model")
-    point <- withr::with_seed(seed, method$fit(train, set, variant, oof_pool))
+    point <- .fit_required(method, set, "point fit",
+                           withr::with_seed(seed, method$fit(train, set, variant, oof_pool)))
   }
 
   boot <- list()

@@ -8,32 +8,41 @@ test_that("D03 point is the capped median and draws come from residual pools", {
   same <- withr::with_seed(4, residual_draws(m$point(bd$point, nd), bd$point$oof_mu, bd$point$oof_resid, 9))
   expect_identical(d, same)
 })
-test_that("D03 keyed draws share residual indices within a key", {
+test_that("D03 keyed draws reproduce the documented scheme", {
   skip_if_not_installed("quantreg")
   bd <- stand_in_bundle("D03_clad", "S3", "UK"); m <- .p2e_method("D03")
-  nd <- make_synthetic_data(3, 2)[c(1, 1, 2), ]
-  d <- withr::with_seed(5, m$draw(bd$point, nd, 30, c(1L, 1L, 2L), "corrected", -0.5))
-  expect_equal(dim(d), c(3L, 30L))
-  expect_identical(d[1, ], d[2, ])
+  nd <- make_synthetic_data(5, 2)[c(1, 1, 2, 3, 3), ]; key <- c(1L, 1L, 2L, 3L, 3L); M <- 20
+  d <- withr::with_seed(5, m$draw(bd$point, nd, M, key, "corrected", -0.5))
+  expect_equal(dim(d), c(5L, M))
+  expect_identical(d[1, ], d[2, ]); expect_identical(d[4, ], d[5, ])
   expect_false(isTRUE(all.equal(d[1, ], d[3, ])))
+  mu <- m$point(bd$point, nd)
+  U <- withr::with_seed(5, matrix(runif(max(key) * M), max(key), M))
+  g <- .rd_groups(mu, bd$point$oof_mu)
+  hand <- matrix(NA_real_, 5, M)
+  for (i in 1:5) {
+    pool <- bd$point$oof_resid[g$bin %in% as.integer(strsplit(g$key[i], ",")[[1]])]
+    hand[i, ] <- mu[i] + pool[pmax(1, ceiling(U[key[i], ] * length(pool)))]
+  }
+  expect_equal(d, hand)
 })
 test_that("D03 interface fields and variants by set", {
   m <- .p2e_method("clad")
   expect_identical(m$id, "D03_clad"); expect_identical(m$family, "direct")
   expect_identical(m$sets, c("S3", "S4", "S1", "S2")); expect_true(m$uses_oof)
   expect_identical(m$needs, c("quantreg", "glmnet")); expect_identical(m$predict_needs, character(0))
-  expect_identical(.method_variants(m, "S1")[[1]], list(form = "numeric"))
-  expect_identical(.method_variants(m, "S2")[[1]], list(form = "numeric"))
-  expect_identical(.method_variants(m, "S3")[[1]], list(form = "linear"))
-  expect_identical(.method_variants(m, "S4")[[1]], list(form = "linear"))
-  expect_identical(vapply(.method_variants(m, "S3"), `[[`, "", "form"),
+  expect_identical(.p2e_method_variants(m, "S1")[[1]], list(form = "numeric"))
+  expect_identical(.p2e_method_variants(m, "S2")[[1]], list(form = "numeric"))
+  expect_identical(.p2e_method_variants(m, "S3")[[1]], list(form = "linear"))
+  expect_identical(.p2e_method_variants(m, "S4")[[1]], list(form = "linear"))
+  expect_identical(vapply(.p2e_method_variants(m, "S3"), `[[`, "", "form"),
                    c("linear", "quadratic", "spline3", "spline3_int"))
 })
-test_that(".method_variants accepts a list or a function and validates", {
-  expect_identical(.method_variants(list(variants = list(list(a = 1))), "S1"), list(list(a = 1)))
-  expect_identical(.method_variants(list(variants = function(set) list(list(s = set))), "S4"), list(list(s = "S4")))
-  expect_error(.method_variants(list(variants = list()), "S1"), "variants")
-  expect_error(.method_variants(list(variants = function(set) NULL), "S1"), "variants")
+test_that(".p2e_method_variants accepts a list or a function and validates", {
+  expect_identical(.p2e_method_variants(list(variants = list(list(a = 1))), "S1"), list(list(a = 1)))
+  expect_identical(.p2e_method_variants(list(variants = function(set) list(list(s = set))), "S4"), list(list(s = "S4")))
+  expect_error(.p2e_method_variants(list(variants = list()), "S1"), "variants")
+  expect_error(.p2e_method_variants(list(variants = function(set) NULL), "S1"), "variants")
 })
 test_that("D03 stored fit is small and holds no crq object", {
   skip_if_not_installed("quantreg")
@@ -73,4 +82,14 @@ test_that("D03 lasso_dummies on S1 fits and predicts", {
   expect_true(isTRUE(f$converged))
   p <- m$point(f, make_synthetic_data(5, 2))
   expect_length(p, 5L); expect_true(all(is.finite(p)) && all(p <= 1))
+})
+test_that("lasso_dummies bundle OOF equals the standalone fit's internal OOF", {
+  skip_if_not_installed("quantreg"); skip_if_not_installed("glmnet")
+  m <- .p2e_method("D03"); v <- list(form = "lasso_dummies")
+  train <- make_synthetic_data(120, seed = 4, countries = c("DE", "UK"))
+  b <- .fit_bundle(m, train, "S1", "UK", v, K = 4, B = 0, seed = 7)
+  train$y <- .score(as.matrix(train[DIMS]), p2e_value_set("UK")); train$fold <- b$fold_id
+  s <- m$fit(train, "S1", v, oof = NULL)
+  expect_equal(s$oof_mu, b$point$oof_mu); expect_equal(s$oof_resid, b$point$oof_resid)
+  expect_equal(s$cols, b$point$cols); expect_equal(s$beta, b$point$beta)
 })
