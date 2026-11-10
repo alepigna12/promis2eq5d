@@ -7,9 +7,52 @@ test_that("a bundle has K fold fits, B boot fits and aligned oof", {
   expect_s3_class(b$vs, "p2e_vs"); expect_equal(b$target, "UK")
   expect_named(b$meta, c("data_doi","seed","repo_commit","ihea_tag","r_version","pkg_versions","created"))
 })
-test_that("failed bootstrap replicates are dropped and counted", {
+test_that("failed replicates are replaced until B converge", {
   b <- .fit_bundle(toy_method(fail_on = 2), make_synthetic_data(200, 1), "S4", "UK", list(), 3, 4, 1)
-  expect_length(b$boot, 3); expect_equal(b$boot_failed, 1L); expect_equal(b$boot_attempted, 4L)
+  expect_length(b$boot, 4); expect_equal(b$boot_attempted, 5L); expect_equal(b$boot_failed, 1L)
+  expect_equal(b$boot_failures$b, 2L); expect_match(b$boot_failures$reason, "failed on purpose")
+})
+test_that("the attempt cap keeps the converged replicates and warns", {
+  # calls 1-4 are the point and the K = 3 fold fits; attempt b is call 4 + b.
+  # Only attempts 1, 3 and 5 converge, so the cap of 2B = 8 attempts is reached
+  m <- toy_method(); m$fit <- local({ f <- m$fit; n <- 0L
+    function(...) { n <<- n + 1L; if (n > 4L && !(n - 4L) %in% c(1L, 3L, 5L)) stop("flaky"); f(...) } })
+  expect_warning(b <- .fit_bundle(m, make_synthetic_data(200, 1), "S4", "UK", list(), 3, 4, 1),
+                 "3 of 4 .*8 attempts")
+  expect_length(b$boot, 3L); expect_equal(b$boot_attempted, 8L)
+})
+test_that("B = 0 makes no attempts and no warning", {
+  expect_no_warning(b <- .fit_bundle(toy_method(), make_synthetic_data(200, 1), "S4", "UK", list(), 3, 0, 1))
+  expect_length(b$boot, 0); expect_equal(b$boot_attempted, 0L); expect_equal(b$boot_failed, 0L)
+})
+test_that("when no replicate converges the fit stops", {
+  m <- toy_method(); m$fit <- local({ f <- m$fit; n <- 0L
+    function(...) { n <<- n + 1L; if (n > 4L) stop("flaky"); f(...) } })
+  expect_error(.fit_bundle(m, make_synthetic_data(200, 1), "S4", "UK", list(), 3, 2, 1), "failed for toy")
+})
+test_that("B of 500 or more is refused (attempt seeds would reach the fold seeds)", {
+  expect_error(.fit_bundle(toy_method(), make_synthetic_data(50, 1), "S4", "UK", list(), 3, 500, 1), "B")
+})
+test_that("uses_oof bundles store one pool and rebuild each replicate's pool", {
+  train <- make_synthetic_data(200, 1)
+  b <- .fit_bundle(toy_method(uses_oof = TRUE), train, "S4", "UK", list(), 3, 3, 7)
+  expect_named(b$pool, c("oof_mu", "oof_resid")); expect_equal(b$pool$oof_mu, b$oof$mu)
+  for (f in b$boot) {
+    expect_null(f$oof_mu); expect_true(is.integer(f$boot_b))
+    expect_equal(.boot_pool(b, f), f$oof_given, ignore_attr = TRUE)   # the toy keeps what it was given
+  }
+  expect_equal(.boot_pool(b, b$point), b$pool)
+})
+test_that("pools are rebuilt under the user's RNG kind", {
+  b <- .fit_bundle(toy_method(uses_oof = TRUE), make_synthetic_data(200, 1), "S4", "UK", list(), 3, 2, 7)
+  ref <- .boot_pool(b, b$boot[[2]])
+  withr::with_rng_version("3.5.0", expect_equal(.boot_pool(b, b$boot[[2]]), ref))
+  withr::with_seed(1, .rng_kind = "L'Ecuyer-CMRG", expect_equal(.boot_pool(b, b$boot[[2]]), ref))
+})
+test_that("a pool that cannot be rebuilt is an error", {
+  b <- .fit_bundle(toy_method(uses_oof = TRUE), make_synthetic_data(200, 1), "S4", "UK", list(), 3, 2, 7)
+  b$boot[[1]]$idx_check <- b$boot[[1]]$idx_check + 1
+  expect_error(.boot_pool(b, b$boot[[1]]), "cannot be rebuilt")
 })
 test_that("missing bundles give an actionable error", {
   withr::local_options(promis2eq5d.fit_dir = tempfile(), promis2eq5d.cache_dir = tempfile())
@@ -145,7 +188,7 @@ test_that("fit_info$converged = FALSE (no top-level converged) is honoured every
   expect_error(.fit_bundle(toy_method(uses_oof = TRUE, fi_bad_call = 2), tr, "S4", "UK", list(), 3, 0, 1),
                "fold 2 fit did not converge")
   b <- .fit_bundle(toy_method(fi_bad_call = 6), tr, "S4", "UK", list(), 3, 3, 1)  # boot 2 = call 1 + K + 2
-  expect_equal(b$boot_failed, 1L); expect_length(b$boot, 2)
+  expect_equal(b$boot_failed, 1L); expect_length(b$boot, 3)
   expect_true(.fit_converged(list()))
   expect_false(.fit_converged(list(fit_info = list(converged = NA))))
 })

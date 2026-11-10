@@ -27,8 +27,9 @@ test_that("D03 retrain on an item set: target, boot, folds and caching", {
   # individual draws work without fold fits
   nd <- retrain_item_data()[1:5, ]
   m <- .p2e_method("D03")
-  expect_equal(dim(m$draw(rb$boot[[1]], nd, 3, key = 1:5, draw_type = NULL, lo = NULL)), c(5L, 3L))
-  expect_equal(dim(m$draw(rb$point, nd, 3, key = 1:5, draw_type = NULL, lo = NULL)), c(5L, 3L))
+  expect_equal(dim(m$draw(rb$boot[[1]], nd, 3, key = 1:5, draw_type = NULL, lo = NULL,
+                       pool = .boot_pool(rb, rb$boot[[1]]))), c(5L, 3L))
+  expect_equal(dim(m$draw(rb$point, nd, 3, key = 1:5, draw_type = NULL, lo = NULL, pool = rb$pool)), c(5L, 3L))
 
   rbi <- quiet_retrain("D03", "S1", vs, boot = 0, interval = TRUE, mode = "individual", cache = FALSE)
   expect_length(rbi$folds, 3); expect_length(rbi$boot, 0)
@@ -63,8 +64,8 @@ test_that("a mean-only D03 retrain can draw (it keeps its own residual pairs)", 
   rb <- quiet_retrain("D03", "S1", p2e_value_set("USA"), mode = "mean", cache = FALSE)
   expect_length(rb$boot, 0)
   nd <- retrain_item_data()[1:3, ]
-  expect_false(is.null(rb$point$oof_resid))
-  d <- .p2e_method("D03")$draw(rb$point, nd, 2, key = 1:3, draw_type = NULL, lo = NULL)
+  expect_false(is.null(rb$pool$oof_resid)); expect_null(rb$point$oof_resid)
+  d <- .p2e_method("D03")$draw(rb$point, nd, 2, key = 1:3, draw_type = NULL, lo = NULL, pool = rb$pool)
   expect_equal(dim(d), c(3L, 2L))
   expect_false(anyNA(d))
 })

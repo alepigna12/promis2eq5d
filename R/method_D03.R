@@ -34,7 +34,7 @@
       f
     },
     point = function(fit, newdata) .d03_predict_mean(fit, newdata),
-    draw = function(fit, newdata, M, key, draw_type, lo) .d03_draw(fit, newdata, M, key)
+    draw = function(fit, newdata, M, key, draw_type, lo, pool = NULL) .d03_draw(fit, newdata, M, key, pool)
   )
 }
 
@@ -117,24 +117,27 @@ parametric_variants <- function(set) {
   f
 }
 
-.d03_draw <- function(fit, newdata, M, key) {
-  if (is.null(fit$oof_mu)) {
+# pool: data.frame(oof_mu, oof_resid) from the bundle (.boot_pool()); NULL = the fit's own pairs
+.d03_draw <- function(fit, newdata, M, key, pool = NULL) {
+  oof_mu <- if (is.null(pool)) fit$oof_mu else pool$oof_mu
+  oof_resid <- if (is.null(pool)) fit$oof_resid else pool$oof_resid
+  if (is.null(oof_mu)) {
     stop("this D03 fit has no residual pairs (it was fitted with oof = FALSE) and cannot draw",
          call. = FALSE)
   }
   mu <- .d03_predict_mean(fit, newdata)
   n <- length(mu)
   if (identical(as.integer(key), seq_len(n))) {
-    return(residual_draws(mu, fit$oof_mu, fit$oof_resid, M))
+    return(residual_draws(mu, oof_mu, oof_resid, M))
   }
   K <- max(key)
   U <- matrix(stats::runif(K * M), K, M)
-  g <- .rd_groups(mu, fit$oof_mu)
+  g <- .rd_groups(mu, oof_mu)
   out <- matrix(NA_real_, n, M)
   for (k in unique(g$key)) {
     rows <- which(g$key == k)
     # sorted, so a shared U selects the same quantile in every pool (within_id = "common")
-    r <- sort(fit$oof_resid[g$bin %in% as.integer(strsplit(k, ",")[[1]])])
+    r <- sort(oof_resid[g$bin %in% as.integer(strsplit(k, ",")[[1]])])
     idx <- pmax(1L, ceiling(U[key[rows], , drop = FALSE] * length(r)))
     out[rows, ] <- mu[rows] + matrix(r[idx], length(rows), M)
   }

@@ -34,7 +34,7 @@
   }
 
   shipped <- .load_bundle(m$id, set, "UK")
-  if (is.null(boot)) boot <- shipped$boot_attempted
+  if (is.null(boot)) boot <- length(shipped$boot)
   if (!(is.numeric(boot) && length(boot) == 1L && !is.na(boot) && boot >= 0)) {
     stop("boot must be a single non-negative number", call. = FALSE)
   }

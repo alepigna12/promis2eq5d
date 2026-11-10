@@ -77,7 +77,8 @@ test_that("one block equals the unblocked reference (direct, corrected D03, and 
     u <- matrix(NA_real_, 5, D)
     for (bb in seq_len(B)) {
       cols <- which(fi == bb)
-      u[, cols] <- .p2e_method("D03_clad")$draw(bd$boot[[bb]], nd, length(cols), key, "corrected", .vs_min(bd$vs))
+      u[, cols] <- .p2e_method("D03_clad")$draw(bd$boot[[bb]], nd, length(cols), key, "corrected", .vs_min(bd$vs),
+                                                  pool = .boot_pool(bd, bd$boot[[bb]]))
     }
     V <- matrix(stats::runif(5 * D), 5, D)[key, , drop = FALSE]
     .clamp(.round_gap(.clamp(u, bd$vs), vs, V), vs)
@@ -203,4 +204,12 @@ test_that("same seed and draws on different data: aligned fits and common indivi
   expect_equal(zmat(a, nd1)[ok], zmat(a2, nd2)[ok])
   ok2 <- inside(a) & inside(o)
   expect_false(isTRUE(all.equal(zmat(a, nd1)[ok2], zmat(o, nd2)[ok2])))
+})
+test_that("the D03 stand-in bundle holds one residual pool, so replicates add little size", {
+  skip_if_not_installed("quantreg")
+  b <- stand_in_bundle("D03_clad", "S3", "UK")
+  m <- .p2e_method("D03_clad")
+  train <- make_synthetic_data(400, seed = 1, countries = c("DE", "UK"))
+  b0 <- .fit_bundle(m, train, "S3", "UK", .p2e_method_variants(m, "S3")[[1]], K = 3, B = 0, seed = 1)
+  expect_lt(length(serialize(b, NULL)), 1.2 * length(serialize(b0, NULL)))
 })

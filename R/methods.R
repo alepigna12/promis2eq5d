@@ -17,7 +17,12 @@
 #                         fits, passes them to fit() of the point fit, and
 #                         passes oof[idx, ] to bootstrap replicate b, with the
 #                         indices idx that resample `train`. Fold fits get
-#                         oof = FALSE. Direct methods only (D03).
+#                         oof = FALSE. Direct methods only (D03). The bundle
+#                         stores the pairs once (bundle$pool), removes
+#                         oof_mu, oof_resid and foldid from the fits, and
+#                         .draw_matrix() passes each fit's pool (.boot_pool())
+#                         to draw(..., pool =); draw() of a uses_oof method
+#                         uses `pool` when given, else the fit's own pairs.
 #                         The oof argument of fit() means: a data.frame
 #                         (oof_mu, oof_resid) = use these residual pairs;
 #                         NULL = compute your own pairs (standalone fit, as in
@@ -29,7 +34,7 @@
 #                         outcome in train$y; train has a `fold` column.
 #   response only:  simulate(fit, newdata, M, key), mean_utility(fit, newdata, vs),
 #                   marginals(fit, newdata)
-#   direct only:    point(fit, newdata), draw(fit, newdata, M, key, draw_type, lo)
+#   direct only:    point(fit, newdata), draw(fit, newdata, M, key, draw_type, lo[, pool = NULL])  (pool: uses_oof methods only)
 
 .p2e_methods <- new.env(parent = emptyenv())
 

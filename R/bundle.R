@@ -44,10 +44,42 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   TRUE
 }
 
-# A replicate fails when fit() errors or the fit did not converge (.fit_converged)
+# A replicate fails when fit() errors or the fit did not converge
+# (.fit_converged). Returns list(fit, reason): the fit and NULL, or NULL and
+# the condition message ("did not converge" for a fit that ran).
 .try_fit <- function(method, train, set, variant, oof = NULL) {
-  f <- tryCatch(method$fit(train, set, variant, oof), error = function(e) NULL)
-  if (is.null(f) || !.fit_converged(f)) NULL else f
+  err <- NULL
+  f <- tryCatch(method$fit(train, set, variant, oof), error = function(e) {
+    err <<- conditionMessage(e)
+    NULL
+  })
+  if (is.null(f)) return(list(fit = NULL, reason = err))
+  if (!.fit_converged(f)) return(list(fit = NULL, reason = "did not converge"))
+  list(fit = f, reason = NULL)
+}
+
+# withr::with_seed with the RNG kinds pinned, so a seed gives the same stream
+# whatever the caller's RNGkind() or RNG version
+.with_fit_seed <- function(seed, expr) {
+  withr::with_seed(seed, expr, .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+                   .rng_sample_kind = "Rejection")
+}
+
+# A checksum of a bootstrap index vector, to detect a sample that cannot be rebuilt
+.idx_check <- function(idx) sum(as.numeric(idx) * seq_along(idx)) %% 2147483647
+
+# The residual pool of a fit of a uses_oof bundle: the bundle's pool for the
+# point fit, else the pool rows of the bootstrap sample of replicate fit$boot_b,
+# rebuilt from the seed and the stored countries.
+.boot_pool <- function(bundle, fit) {
+  if (is.null(fit$boot_b)) return(bundle$pool)
+  n <- length(bundle$boot_country)
+  idx <- .with_fit_seed(bundle$meta$seed + fit$boot_b, .boot_index(bundle$boot_country, n))
+  if (!isTRUE(.idx_check(idx) == fit$idx_check)) {
+    stop("the bootstrap sample of replicate ", fit$boot_b, " cannot be rebuilt in this R session",
+         call. = FALSE)
+  }
+  bundle$pool[idx, , drop = FALSE]
 }
 
 # Bootstrap row indices: resampled within each country (in sorted order) when
@@ -73,6 +105,9 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   f
 }
 
+# B: the number of converged bootstrap replicates wanted. Attempts b = 1, 2, ...
+# (seed + b) continue until B converge or 2B attempts; fewer than B converged
+# warns, none is an error. B = 0 makes no attempts.
 # vs: a p2e_vs object used instead of p2e_value_set(target) (direct methods;
 #   target becomes vs$code). fold_id: precomputed folds (length nrow(train),
 #   values 1..K) instead of make_cv_folds(). fit_folds = FALSE: no fold fits
@@ -86,6 +121,9 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   direct <- identical(method$family, "direct")
   uses_oof <- direct && isTRUE(method$uses_oof)
   n <- nrow(train)
+  if (2L * B >= 1000L) {
+    stop("B must be below 500 (the attempt seeds must stay below the fold seeds)", call. = FALSE)
+  }
 
   if (direct) {
     if (is.null(vs)) vs <- p2e_value_set(target)
@@ -129,7 +167,7 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   point_fit <- function(oof_arg) {
     say("point fit")
     .fit_required(method, set, "point fit",
-                  withr::with_seed(seed, method$fit(train, set, variant, oof_arg)))
+                  .with_fit_seed(seed, method$fit(train, set, variant, oof_arg)))
   }
 
   if (!uses_oof) point <- point_fit(NULL)
@@ -140,7 +178,7 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
     folds <- lapply(seq_len(K), function(k) {
       say("fold ", k, "/", K)
       .fit_required(method, set, paste0("fold ", k, " fit"),
-        withr::with_seed(seed + 1000L + k,
+        .with_fit_seed(seed + 1000L + k,
                          method$fit(train[fold_id != k, , drop = FALSE], set, variant, fold_oof)))
     })
 
@@ -157,9 +195,11 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
       for (k in seq_len(K)) {
         te <- which(fold_id == k)
         # seeded, so the profiles do not depend on (or advance) the caller's stream
-        prof[te, , ] <- withr::with_seed(seed + 2000L + k,
+        prof[te, , ] <- .with_fit_seed(seed + 2000L + k,
           method$simulate(folds[[k]], train[te, , drop = FALSE], Q, key = seq_along(te)))
       }
+      storage.mode(prof) <- "integer"
+      stopifnot(identical(dim(prof), as.integer(c(n, Q, 5L))))
       oof <- list(profiles = prof)
     }
     if (uses_oof) point <- point_fit(oof_pool)
@@ -171,23 +211,51 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
     oof_pool <- data.frame(oof_mu = point$oof_mu, oof_resid = point$oof_resid)
   }
 
-  boot <- list()
-  failed <- 0L
-  for (b in seq_len(B)) {
-    say("boot ", b, "/", B)
-    f <- withr::with_seed(seed + b, {
-      idx <- .boot_index(train[["country"]], n)
-      .try_fit(method, train[idx, , drop = FALSE], set, variant,
-               if (uses_oof) oof_pool[idx, , drop = FALSE])
-    })
-    if (is.null(f)) failed <- failed + 1L else boot[[length(boot) + 1L]] <- f
+  drop_oof <- function(f) {
+    f$oof_mu <- NULL; f$oof_resid <- NULL; f$foldid <- NULL
+    f
   }
-  if (B > 0L && !length(boot)) stop("all ", B, " bootstrap replicates failed for ", method$id)
+
+  boot_country <- as.character(train[["country"]])
+  boot <- list()
+  failures <- data.frame(b = integer(), reason = character())
+  b <- 0L
+  while (length(boot) < B && b < 2L * B) {
+    b <- b + 1L
+    say("boot ", b, "/", B)
+    r <- .with_fit_seed(seed + b, {
+      idx <- .boot_index(boot_country, n)
+      out <- .try_fit(method, train[idx, , drop = FALSE], set, variant,
+                      if (uses_oof) oof_pool[idx, , drop = FALSE])
+      out$idx <- idx
+      out
+    })
+    if (is.null(r$fit)) {
+      failures <- rbind(failures, data.frame(b = b, reason = r$reason))
+    } else {
+      f <- r$fit
+      if (uses_oof) {
+        f <- drop_oof(f)
+        f$boot_b <- b
+        f$idx_check <- .idx_check(r$idx)
+      }
+      boot[[length(boot) + 1L]] <- f
+    }
+  }
+  if (B > 0L && !length(boot)) {
+    stop("all ", b, " bootstrap attempts failed for ", method$id, call. = FALSE)
+  }
+  if (length(boot) < B) {
+    warning("only ", length(boot), " of ", B, " bootstrap replicates converged after ", b,
+            " attempts for ", method$id, call. = FALSE)
+  }
+  if (uses_oof) point <- drop_oof(point)
 
   structure(list(
     method = method$id, set = set, target = if (direct) vs$code else NA_character_,
     vs = vs, variant = variant, point = point, folds = folds, fold_id = fold_id,
-    boot = boot, boot_attempted = as.integer(B), boot_failed = as.integer(failed),
+    boot = boot, boot_attempted = b, boot_failed = b - length(boot), boot_failures = failures,
+    pool = oof_pool, boot_country = if (uses_oof) boot_country,
     oof = oof, y_profiles = y_profiles, state_freq = state_freq,
     meta = .bundle_meta(method, seed)
   ), class = "p2e_bundle")

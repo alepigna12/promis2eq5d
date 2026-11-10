@@ -30,7 +30,7 @@ toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3, bad_call = NULL,
       out
     },
     point = function(fit, newdata) as.numeric(cbind(1, as.matrix(newdata[cols])) %*% fit$coef),
-    draw = function(fit, newdata, M, key, draw_type, lo) {
+    draw = function(fit, newdata, M, key, draw_type, lo, pool = NULL) {
       mu <- as.numeric(cbind(1, as.matrix(newdata[cols])) %*% fit$coef)
       mu + matrix(stats::rnorm(length(mu) * M, 0, fit$sd), length(mu), M)
     }

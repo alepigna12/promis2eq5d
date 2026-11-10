@@ -3,25 +3,26 @@ test_that("D03 point is the capped median and draws come from residual pools", {
   bd <- stand_in_bundle("D03_clad", "S3", "UK"); nd <- make_synthetic_data(6, 2)
   m <- .p2e_method("D03")
   expect_true(all(m$point(bd$point, nd) <= 1))
-  d <- withr::with_seed(4, m$draw(bd$point, nd, 9, 1:6, "corrected", .vs_min(p2e_value_set("UK"))))
+  d <- withr::with_seed(4, m$draw(bd$point, nd, 9, 1:6, "corrected", .vs_min(p2e_value_set("UK")),
+                                           pool = bd$pool))
   expect_equal(dim(d), c(6L, 9L))
-  same <- withr::with_seed(4, residual_draws(m$point(bd$point, nd), bd$point$oof_mu, bd$point$oof_resid, 9))
+  same <- withr::with_seed(4, residual_draws(m$point(bd$point, nd), bd$pool$oof_mu, bd$pool$oof_resid, 9))
   expect_identical(d, same)
 })
 test_that("D03 keyed draws reproduce the documented scheme", {
   skip_if_not_installed("quantreg")
   bd <- stand_in_bundle("D03_clad", "S3", "UK"); m <- .p2e_method("D03")
   nd <- make_synthetic_data(5, 2)[c(1, 1, 2, 3, 3), ]; key <- c(1L, 1L, 2L, 3L, 3L); M <- 20
-  d <- withr::with_seed(5, m$draw(bd$point, nd, M, key, "corrected", -0.5))
+  d <- withr::with_seed(5, m$draw(bd$point, nd, M, key, "corrected", -0.5, pool = bd$pool))
   expect_equal(dim(d), c(5L, M))
   expect_identical(d[1, ], d[2, ]); expect_identical(d[4, ], d[5, ])
   expect_false(isTRUE(all.equal(d[1, ], d[3, ])))
   mu <- m$point(bd$point, nd)
   U <- withr::with_seed(5, matrix(runif(max(key) * M), max(key), M))
-  g <- .rd_groups(mu, bd$point$oof_mu)
+  g <- .rd_groups(mu, bd$pool$oof_mu)
   hand <- matrix(NA_real_, 5, M)
   for (i in 1:5) {
-    pool <- sort(bd$point$oof_resid[g$bin %in% as.integer(strsplit(g$key[i], ",")[[1]])])
+    pool <- sort(bd$pool$oof_resid[g$bin %in% as.integer(strsplit(g$key[i], ",")[[1]])])
     hand[i, ] <- mu[i] + pool[pmax(1, ceiling(U[key[i], ] * length(pool)))]
   }
   expect_equal(d, hand)
@@ -59,7 +60,7 @@ test_that("bundle OOF equals the standalone fit's internal OOF under the same fo
   b <- .fit_bundle(m, train, "S3", "UK", list(form = "linear"), K = 3, B = 0, seed = 7)
   train$y <- .score(as.matrix(train[DIMS]), p2e_value_set("UK")); train$fold <- b$fold_id
   s <- m$fit(train, "S3", list(form = "linear"), oof = NULL)
-  expect_equal(s$oof_mu, b$point$oof_mu); expect_equal(s$oof_resid, b$point$oof_resid)
+  expect_equal(s$oof_mu, b$pool$oof_mu); expect_equal(s$oof_resid, b$pool$oof_resid)
   expect_equal(s$foldid, b$fold_id)
   expect_equal(s$beta, b$point$beta)
 })
@@ -90,7 +91,7 @@ test_that("lasso_dummies bundle OOF equals the standalone fit's internal OOF", {
   b <- .fit_bundle(m, train, "S1", "UK", v, K = 4, B = 0, seed = 7)
   train$y <- .score(as.matrix(train[DIMS]), p2e_value_set("UK")); train$fold <- b$fold_id
   s <- m$fit(train, "S1", v, oof = NULL)
-  expect_equal(s$oof_mu, b$point$oof_mu); expect_equal(s$oof_resid, b$point$oof_resid)
+  expect_equal(s$oof_mu, b$pool$oof_mu); expect_equal(s$oof_resid, b$pool$oof_resid)
   expect_equal(s$cols, b$point$cols); expect_equal(s$beta, b$point$beta)
 })
 
@@ -99,16 +100,31 @@ test_that("D03 common key gives positively rank-correlated draws across differen
   bd <- stand_in_bundle("D03_clad", "S3", "UK"); m <- .p2e_method("D03")
   nd <- make_synthetic_data(300, 2)
   mu <- m$point(bd$point, nd)
-  g <- .rd_groups(mu, bd$point$oof_mu)
+  g <- .rd_groups(mu, bd$pool$oof_mu)
   expect_gt(length(unique(g$key)), 1L)
   # one row from each of two different pools, sharing one key (one person, two time points)
   i <- c(which(g$key == g$key[1])[1], which(g$key != g$key[1])[1])
   M <- 2000
-  d <- withr::with_seed(3, m$draw(bd$point, nd[i, ], M, c(1L, 1L), "corrected", -0.5))
+  d <- withr::with_seed(3, m$draw(bd$point, nd[i, ], M, c(1L, 1L), "corrected", -0.5, pool = bd$pool))
   r <- d - mu[i]
   # ties in the pools keep it below 1; the unsorted pools gave about 0
   expect_gt(stats::cor(r[1, ], r[2, ], method = "spearman"), 0.5)
   # independent rows are not correlated
-  d2 <- withr::with_seed(3, m$draw(bd$point, nd[i, ], M, 1:2, "corrected", -0.5))
+  d2 <- withr::with_seed(3, m$draw(bd$point, nd[i, ], M, 1:2, "corrected", -0.5, pool = bd$pool))
   expect_lt(abs(stats::cor((d2 - mu[i])[1, ], (d2 - mu[i])[2, ], method = "spearman")), 0.2)
+})
+test_that("rebuilding each replicate's pool equals drawing with the pool handed back to the fit", {
+  skip_if_not_installed("quantreg")
+  train <- make_synthetic_data(300, 1)
+  b <- .fit_bundle(.p2e_method("D03"), train, "S3", "UK", list(form = "linear"), K = 3, B = 2, seed = 5)
+  nd <- make_synthetic_data(8, 2); vs <- p2e_value_set("UK"); key <- 1:8
+  got <- withr::with_seed(3, .draw_matrix(b, nd, vs, 6, key, "corrected"))
+  fits <- lapply(b$boot, function(f) {
+    p <- .boot_pool(b, f); f$oof_mu <- p$oof_mu; f$oof_resid <- p$oof_resid
+    f$boot_b <- NULL
+    f
+  })
+  b2 <- b; b2$pool <- NULL
+  ref <- withr::with_seed(3, .draw_matrix(b2, nd, vs, 6, key, "corrected", fits = fits))
+  expect_identical(got, ref)
 })

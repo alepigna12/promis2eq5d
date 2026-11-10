@@ -61,6 +61,9 @@ ENGINE_BLOCK <- 500L
   fit_index <- rep_len(seq_len(B), D)
   cols_of <- lapply(seq_len(B), function(b) which(fit_index == b))
 
+  # residual pools, once per fit (uses_oof methods only)
+  pools <- if (direct && isTRUE(m$uses_oof)) lapply(fits, function(f) .boot_pool(bundle, f))
+
   u <- matrix(NA_real_, n, D)
   profiles <- if (direct) NULL else array(NA_integer_, c(n, D, 5L))
 
@@ -74,7 +77,10 @@ ENGINE_BLOCK <- 500L
       for (b in seq_len(B)) {
         cols <- cols_of[[b]]
         if (!length(cols)) next
-        ub[, cols] <- matrix(m$draw(fits[[b]], nd_b, length(cols), key_b, draw_type, lo), nb, length(cols))
+        ub[, cols] <- matrix(
+          if (is.null(pools)) m$draw(fits[[b]], nd_b, length(cols), key_b, draw_type, lo)
+          else m$draw(fits[[b]], nd_b, length(cols), key_b, draw_type, lo, pool = pools[[b]]),
+          nb, length(cols))
       }
       ub <- .clamp(ub, bundle$vs)
       if (!is.null(crosswalk)) ub <- .apply_crosswalk(ub, crosswalk, vs)
