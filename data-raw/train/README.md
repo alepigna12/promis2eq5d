@@ -64,8 +64,8 @@ select seconds, bundle about 8 min.
 ## Running on the JHPCE cluster
 
 Scripts: `data-raw/slurm/submit.sh`, `array.sh`, `cluster.env.example` (adapted from the
-iHEA_2027 cluster scripts). Nothing is fitted on the login node: `submit.sh` only runs
-`train.R list <stage>` (it prints ids, a few seconds) and `sbatch`.
+iHEA_2027 cluster scripts). No R runs on the login node: `list.sh` (in an `srun` session) lists
+unit ids, and `submit.sh` only reads that list and calls `sbatch`.
 
 **Setup (once).**
 1. Clone over SSH and switch to the branch:
@@ -85,24 +85,37 @@ iHEA_2027 cluster scripts). Nothing is fitted on the login node: `submit.sh` onl
    `TIME_*` are 3 x the projected time of the stage's slowest unit (R06 bundles set
    `TIME_BUNDLE`); `MEM_*` were not measured, so check `sacct` MaxRSS after the cv stage.
 
-**Run order.** For each stage run the dry-run, read it, then submit, as two separate
-commands. A stage starts only after the previous one has finished (`squeue -u $USER`
-is empty).
+   `TIME_BUNDLE` is 48 h because the R06 projection ignores Q; check the shared partition's
+   maximum with `sinfo -o "%P %l"` and lower it if needed. `PROJECT_DIR`, `OUT` and
+   `TSCORE_TABLE` must not contain commas or spaces (`sbatch --export` is comma-delimited).
+
+**Run order.** No R runs on the login node. `list.sh` (cv and bundle only) runs inside an
+`srun --pty` session and writes `$OUT/submit/<stage>.txt`; it loads the installed package, so
+the install step above comes first. `submit.sh` runs on the login node (never inside an srun
+allocation: `SLURM_*` variables leak through `--export=ALL` and can clash with `--mem`),
+reads that list, and calls `sbatch`. Per stage: (a) list inside srun, then exit the session;
+(b) the dry-run on the login node; (c) separately, after reading the dry-run, the real
+submit. Never chain these with `&&`. A stage starts only after the previous one has finished
+(`squeue -u $USER` is empty). cv and bundle:
 ```
-DRY_RUN=1 data-raw/slurm/submit.sh cv
+srun --pty --cpus-per-task=1 --mem=4G --time=00:20:00 bash
+data-raw/slurm/list.sh cv                  # writes $OUT/submit/cv.txt (153 ids); then exit
+DRY_RUN=1 data-raw/slurm/submit.sh cv      # login node
 data-raw/slurm/submit.sh cv                # 153 array tasks, one unit each
-DRY_RUN=1 data-raw/slurm/submit.sh select
-data-raw/slurm/submit.sh select            # a one-element array running `train.R select`
-DRY_RUN=1 data-raw/slurm/submit.sh bundle
-data-raw/slurm/submit.sh bundle            # 23 array tasks, one bundle each
-DRY_RUN=1 data-raw/slurm/submit.sh collect
-data-raw/slurm/submit.sh collect           # one-element array; the table is in the slurm log
 ```
-`SMOKE=1` in front of any of these runs the smoke variant. Logs are in `slurm_logs/`
-(`p2e_<stage>_<jobid>_<index>.out`); the submit lists are in `$OUT/submit/`. Each task passes
-`--commit` and `--dirty` from the cluster checkout (`git rev-parse HEAD`, `git status`), so
-keep the checkout clean while the bundle stage runs. `submit.sh` runs `list` before the
-dry-run prints, so even a dry-run writes a list file.
+select and collect need no list (a one-element array running `train.R select` / `collect`;
+the collect table is in the slurm log):
+```
+DRY_RUN=1 data-raw/slurm/submit.sh select
+data-raw/slurm/submit.sh select
+```
+Then the same three steps for `bundle` (23 tasks, one bundle each), then the two commands
+for `collect`. `SMOKE=1` in front of `list.sh` and `submit.sh` runs the smoke variant
+(`list.sh` overwrites `$OUT/submit/<stage>.txt`, so list again when switching). Logs are in
+`slurm_logs/` (`p2e_<stage>_<jobid>_<index>.out`); each submission is recorded as
+`$OUT/submit/<stamp>_<stage>.txt`. Each task passes `--commit` and `--dirty` from the
+cluster checkout (`git rev-parse HEAD`, `git status`), so keep the checkout clean while the
+bundle stage runs.
 
 **Afterwards.** fastscratch purges files after 30 days and has no backup: copy `$OUT/fits`
 and `$OUT/selected.csv` (and the `slurm_logs`) to your own storage as soon as `collect` is done.

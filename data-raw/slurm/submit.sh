@@ -4,12 +4,17 @@
 # Adapted from the iHEA_2027 script slurm/submit.sh at tag freeze-ihea2027-abstract-v3.
 # Reads data-raw/slurm/cluster.env (PARTITION, MAX_PARALLEL, PROJECT_DIR, OUT,
 # TSCORE_TABLE, TIME_<STAGE>, MEM_<STAGE>; optional ACCOUNT, R_MODULE).
-# cv and bundle: the unit ids come from `train.R list <stage>` (cheap, no fitting;
-# the only R run on the login node) into $OUT/submit/<stamp>_<stage>.txt, one array
-# task per id. select and collect: a one-element array whose single task runs the
-# stage (no ids); the list file holds the one line "<stage>".
-# SMOKE=1 submits the smoke run (--smoke). DRY_RUN=1 prints the sbatch command only
-# (the list file is still written, it is needed for the array size).
+# Run this on the login node, never inside an srun allocation (SLURM_* variables
+# would leak through --export=ALL and can clash with --mem). No R runs here.
+# cv and bundle: the unit ids are read from $OUT/submit/<stage>.txt, made beforehand
+# by data-raw/slurm/list.sh in an srun session, and copied to the record
+# $OUT/submit/<stamp>_<stage>.txt, one array task per id. select and collect: a
+# one-element array whose single task runs the stage (no ids); the record holds
+# the one line "<stage>".
+# SMOKE=1 submits the smoke run (--smoke); run list.sh with SMOKE=1 too.
+# DRY_RUN=1 prints the sbatch command only (the dated record is still written).
+# PROJECT_DIR, OUT and TSCORE_TABLE must not contain commas or spaces (--export
+# is comma-delimited).
 
 set -euo pipefail
 
@@ -40,26 +45,23 @@ fi
 # --account only when ACCOUNT is set (not needed on JHPCE)
 account_opt=()
 if [ -n "${ACCOUNT:-}" ]; then account_opt=(--account="$ACCOUNT"); fi
-smoke_opt=()
-if [ "${SMOKE:-0}" = "1" ]; then smoke_opt=(--smoke); fi
 
 mkdir -p "$PROJECT_DIR/slurm_logs" "$OUT/submit"
 stamp="$(date +%Y%m%d-%H%M%S)"
 list="$OUT/submit/${stamp}_${stage}.txt"
 
 if [ "$stage" = "cv" ] || [ "$stage" = "bundle" ]; then
-  if [ -n "${R_MODULE:-}" ]; then
-    # the module's activation scripts read unset variables (JHPCE conda_R:
-    # SYS_SYSROOT), so strict mode is off while it loads
-    set +u
-    module load "$R_MODULE"
-    set -u
+  # the ids list is made beforehand by data-raw/slurm/list.sh inside an srun session
+  # (no R runs here); copy it to the dated record of this submission
+  src="$OUT/submit/${stage}.txt"
+  if [ ! -f "$src" ]; then
+    echo "missing $src: make it inside an interactive session, then exit it and rerun:" >&2
+    echo "  srun --pty --cpus-per-task=1 --mem=4G --time=00:20:00 bash" >&2
+    echo "  data-raw/slurm/list.sh $stage" >&2
+    exit 1
   fi
-  command -v Rscript >/dev/null 2>&1 || { echo "Rscript not found: set R_MODULE in $env_file" >&2; exit 1; }
-  # one cheap Rscript call (lists ids, fits nothing); needs the installed package
-  (cd "$PROJECT_DIR" && Rscript data-raw/train/train.R list "$stage" ${smoke_opt[@]+"${smoke_opt[@]}"}) \
-    | tr -d '\r' | grep -v '^[[:space:]]*$' > "$list.tmp"
-  mv "$list.tmp" "$list"
+  # grep exits 1 on an empty list, which pipefail would turn into a silent exit
+  tr -d '\r' < "$src" | { grep -v '^[[:space:]]*$' || true; } > "$list"
 else
   echo "$stage" > "$list"
 fi
