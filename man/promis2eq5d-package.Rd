@@ -17,6 +17,14 @@ EQ-5D\Sexpr[results=rd]{"\\\\enc{\u2122}{(TM)}"} is a trade mark of the EuroQol 
 PROMIS\Sexpr[results=rd]{"\\\\enc{\u00ae}{(R)}"} is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.
 }
 
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/alepigna12/promis2eq5d}
+  \item Report bugs at \url{https://github.com/alepigna12/promis2eq5d/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Alessio Pignatelli \email{apignat1@jh.edu}
 

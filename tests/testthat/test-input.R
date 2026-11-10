@@ -75,7 +75,7 @@ test_that("set choice follows the preferred order and honours overrides", {
 test_that("columns table, age warning and aliases", {
   pc <- p2e_columns(); expect_setequal(pc$column[pc$type == "item"], unname(ITEM_IDS))
   d <- data.frame(T_PF = 40, T_ANX = 55, T_DEP = 50, T_FAT = 52, T_SLP = 48, T_SR = 45, T_PI = 60, P9 = 4, AGE = 15, female = 0)
-  expect_warning(s <- .standardise_input(d), "18-100")
+  expect_warning(s <- .standardise_input(d), "outside [0-9]+-[0-9]+")
   expect_equal(c(s$P9, s$AGE, s$female), c(4, 15, 0))
   d$female <- NULL; d$sex <- "male"; expect_equal(suppressWarnings(.standardise_input(d))$female, 0)
 })

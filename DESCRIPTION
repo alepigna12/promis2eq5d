@@ -10,6 +10,8 @@ Description: Predicts 'EQ-5D-5L' utilities and dimension responses from 'PROMIS-
     Supports mean, individual-draw and cohort-draw prediction modes.
 License: MIT + file LICENSE
 Encoding: UTF-8
+LazyData: true
+LazyDataCompression: xz
 Depends: R (>= 4.1.0)
 Imports: eq5d (>= 0.17.0), splines, stats, tools, utils, withr
 Suggests: glmnet, MASS, Matrix, ordinal, pbivnorm, quantreg, testthat (>= 3.2.0), tibble, xgboost (>= 3.2.0)

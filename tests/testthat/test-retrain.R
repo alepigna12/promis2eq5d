@@ -83,7 +83,9 @@ test_that("response methods and bad arguments error", {
 
 test_that(".training_data errors clearly when nothing is available", {
   withr::local_options(promis2eq5d.training_data = NULL)
-  skip_if(exists("p2e_training", envir = asNamespace("promis2eq5d"), inherits = FALSE))
+  e <- new.env()
+  suppressWarnings(utils::data("p2e_training", package = "promis2eq5d", envir = e))
+  skip_if(exists("p2e_training", envir = e, inherits = FALSE))
   expect_error(.training_data(), "training data")
 })
 

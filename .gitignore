@@ -6,3 +6,6 @@ handoff-*.md
 /fits-cache/
 /docs/
 /.superpowers/
+/data/*
+!/data/p2e_training.rda
+/output/

@@ -125,9 +125,11 @@ p2e_columns <- function() {
   src <- .pick(data, "age", "AGE")
   if (!is.na(src)) {
     a <- .check_numeric(data[[src]], src)
-    odd <- which(!is.na(a) & (a < 18 | a > 100))
+    td <- tryCatch(.training_data(), error = function(e) NULL)
+    rng <- if (is.null(td)) c(18, 100) else c(floor(min(td$AGE)), ceiling(max(td$AGE)))
+    odd <- which(!is.na(a) & (a < rng[1] | a > rng[2]))
     if (length(odd)) {
-      warning("column '", src, "' has values outside 18-100 at ", .row_text(odd),
+      warning("column '", src, "' has values outside ", rng[1], "-", rng[2], " at ", .row_text(odd),
               "; predictions outside the training age range are extrapolations.",
               call. = FALSE)
     }

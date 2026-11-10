@@ -1,4 +1,4 @@
-# Ported from iHEA_2027 R/functions/design.R at freeze-ihea2027-abstract-v3 (a79e102); changes: .direct_design and .independent_cols added from R/functions/model_interface.R (lines 696-710 and the same file's .independent_cols; the lasso_dummies design for the direct methods); dropped load_model_data, target_utility, state_weights, loco_folds, make_cohorts and PF_BAND_CUTS; lasso_select keeps the gaussian branch only (other families error) and checks that glmnet is installed; added stats:: and splines:: namespacing; pipeline sourcing and library() calls removed; make_cv_folds (from R/functions/design.R, now an error without country and util_band) added back; PREDICTOR_SETS, ITEMS and TSCORES come from constants.R
+# Ported from iHEA_2027 R/functions/design.R at freeze-ihea2027-abstract-v3 (a79e102); changes: .direct_design and .independent_cols added from R/functions/model_interface.R (lines 696-710 and the same file's .independent_cols; the lasso_dummies design for the direct methods); dropped load_model_data, target_utility, state_weights, loco_folds, make_cohorts and PF_BAND_CUTS; lasso_select keeps the gaussian branch only (other families error) and checks that glmnet is installed; added stats:: and splines:: namespacing; pipeline sourcing and library() calls removed; make_cv_folds (from R/functions/design.R, now an error without country and util_band) added back; PREDICTOR_SETS, ITEMS and TSCORES come from constants.R; .util_band added from R/functions/splits.R (make_strata)
 
 # Design matrices and lasso selection: the data layer shared by every mapping model.
 #
@@ -179,6 +179,24 @@ lasso_select <- function(X, y, family = "gaussian", foldid) {
 }
 
 # ---- CV folds ---------------------------------------------------------------
+
+# Ported from iHEA_2027 R/functions/splits.R (make_strata, lines 20-45) at freeze-ihea2027-abstract-v3 (a79e102); changes: takes the EQ-5D profile matrix and the country codes instead of the raw data; utilities from .score() on the FR 2020, DE 2018 and UK 2026 sets (p2e_value_set); only util_band is returned
+# util_band: "FH" = full health (11111); "Q1"-"Q4" = quartiles (type 7) of the
+# own-country utility among the other respondents of that country.
+.util_band <- function(profiles, country) {
+  profiles <- as.matrix(profiles)
+  vs <- c(FR = "France", DE = "Germany", UK = "UK")
+  full_health <- rowSums(profiles == 1) == 5
+  band <- rep("FH", nrow(profiles))
+  for (cc in names(vs)) {
+    idx <- which(country == cc & !full_health)
+    if (!length(idx)) next
+    u <- .score(profiles[idx, , drop = FALSE], p2e_value_set(vs[[cc]]))
+    q <- stats::quantile(u, probs = 0:4 / 4, type = 7)
+    band[idx] <- paste0("Q", cut(u, q, include.lowest = TRUE, labels = FALSE))
+  }
+  band
+}
 
 # v-fold assignment stratified by country x util_band. Within each stratum
 # (taken in sorted order) rows are shuffled with `seed` and given folds in

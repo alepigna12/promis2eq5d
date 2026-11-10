@@ -2,14 +2,15 @@
 # (retrain = TRUE). Response methods rescore under any value set and need no
 # refit.
 
-# The training data: the option promis2eq5d.training_data, else the internal
-# p2e_training object (shipped by a later plan), else an error.
+# The training data: the option promis2eq5d.training_data, else the shipped
+# p2e_training data set, else an error.
 .training_data <- function() {
   td <- getOption("promis2eq5d.training_data")
   if (!is.null(td)) return(td)
-  ns <- asNamespace("promis2eq5d")
-  if (exists("p2e_training", envir = ns, inherits = FALSE)) {
-    return(get("p2e_training", envir = ns, inherits = FALSE))
+  e <- new.env(parent = emptyenv())
+  suppressWarnings(utils::data("p2e_training", package = "promis2eq5d", envir = e))
+  if (exists("p2e_training", envir = e, inherits = FALSE)) {
+    return(get("p2e_training", envir = e, inherits = FALSE))
   }
   stop("the training data are not available: set options(promis2eq5d.training_data = <data frame>) ",
        "or install a version of promis2eq5d that ships them", call. = FALSE)
