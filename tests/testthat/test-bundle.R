@@ -59,8 +59,8 @@ test_that(".boot_index does not depend on the collation locale", {
   })))
   expect_identical(withr::with_collate("C", withr::with_seed(3, .boot_index(country, 60))), hand)
   loc <- if (.Platform$OS.type == "windows") "English_United States.1252" else "en_US.UTF-8"
-  other <- tryCatch(withr::with_collate(loc, sort(c("a", "B"))), error = function(e) "B", warning = function(w) "B")
-  skip_if(identical(other, c("B", "a")), "no locale that collates differently from C")
+  other <- tryCatch(withr::with_collate(loc, sort(c("a", "B"))), error = function(e) NULL, warning = function(w) NULL)
+  skip_if(is.null(other) || identical(other, c("B", "a")), "no locale that collates differently from C")
   expect_identical(withr::with_collate(loc, withr::with_seed(3, .boot_index(country, 60))), hand)
 })
 test_that("progress shows the attempt and how many have converged", {
