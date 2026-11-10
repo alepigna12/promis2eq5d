@@ -89,3 +89,15 @@ test_that("synthetic data has the pipeline columns and scores U_own on the value
   }
   expect_error(make_synthetic_data(10, 1, "XX"), "subset")
 })
+
+test_that("make_cv_folds works without an ID column and gives the same folds as with one", {
+  d <- data.frame(country = rep(c("UK", "FR"), each = 30), util_band = rep(1:3, 20))
+  a <- make_cv_folds(d, v = 4, seed = 11)
+  expect_named(a, "fold")
+  expect_equal(nrow(a), 60L)
+  d$ID <- paste0("p", seq_len(60))
+  b <- make_cv_folds(d, v = 4, seed = 11)
+  expect_named(b, c("ID", "fold"))
+  expect_identical(a$fold, b$fold)
+  expect_identical(b$ID, d$ID)
+})

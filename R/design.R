@@ -202,14 +202,14 @@ lasso_select <- function(X, y, family = "gaussian", foldid) {
 # (taken in sorted order) rows are shuffled with `seed` and given folds in
 # rotation, continuing the rotation across strata so fold sizes differ by at
 # most 1 overall and by at most 1 within every stratum.
-# Returns data.frame(ID, fold) in the row order of df.
+# Returns data.frame(ID, fold) in the row order of df (fold only when df has no ID column).
 make_cv_folds <- function(df, v = 10, seed) {
   if (is.null(df[["country"]]) && is.null(df[["util_band"]])) {
     stop("make_cv_folds needs a country and/or a util_band column", call. = FALSE)
   }
   stratum <- paste(df$country, df$util_band, sep = "|")
   fold <- integer(nrow(df))
-  withr::with_seed(seed, {
+  .with_fit_seed(seed, {
     offset <- 0L
     for (s in sort(unique(stratum))) {
       idx <- which(stratum == s)
@@ -218,7 +218,7 @@ make_cv_folds <- function(df, v = 10, seed) {
       offset <- offset + length(idx)
     }
   })
-  data.frame(ID = df$ID, fold = fold, stringsAsFactors = FALSE)
+  if (is.null(df[["ID"]])) data.frame(fold = fold) else data.frame(ID = df$ID, fold = fold, stringsAsFactors = FALSE)
 }
 
 # ---- direct-method design -----------------------------------------------------

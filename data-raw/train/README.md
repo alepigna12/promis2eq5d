@@ -24,9 +24,13 @@ either unless the author decides so.
 Settings: `TRAIN_SEED = 20261110` (`units.R`); K = 10, Q = 50, B = 200 (R09: 50). Every
 write goes to `<file>.tmp` and is renamed. Warnings raised in a unit are collected (not
 turned into errors) and stored in the unit's output; the count is printed. `--commit` and
-`--dirty` become the bundles' `repo_commit` and `repo_dirty`. `p2e_training` has no ID
-column, so folds (`make_cv_folds`, country x util_band) are computed on a copy with an ID
-added, and passed to `.fit_bundle()` as `fold_id`; the cv units and bundles share them.
+`--dirty` become the bundles' `repo_commit` and `repo_dirty`. Folds (`make_cv_folds`, country x util_band, from the row order) are computed once per run
+and passed to `.cv_unit()` and `.fit_bundle()` as `fold_id`, so cv units and bundles share them.
+
+`bundle` with no ids rebuilds every bundle (all 23), overwriting existing fits. Keep `--out`
+outside the package checkout. Without `--smoke`, `bundle` requires `--commit` and `--dirty 0|1`.
+`selected.csv` has a `smoke` column; `bundle` refuses a file made in the other mode. `collect`
+shows the target B per bundle and a `short` flag when fewer replicates converged.
 
 `--smoke`: a stratified 600-row subsample (country x util_band), K = 5, Q = 5, B = 3
 (R09: 2), R09 configurations 1-2 only (41 cv units). K is 5 rather than 3 because the D03
@@ -42,6 +46,8 @@ cv unit (K fold fits, D03 each with K - 1 inner fits, so K^2 fits): R09 x17 = (1
 D03 x34 (K^2 fits: 100 vs 25, same row factor). Bundle (1 + K + B fits): R06, D03, D12
 x176 (211 fits vs 9), R09 x57 (61 vs 8). Superlinear fits (quantreg, mvop) would cost
 more; treat these as lower-leaning estimates and set `--time` with margin.
+The scaling also ignores Q (5 in smoke, 50 in the full run, in the out-of-fold simulation),
+which adds to R06 and R09 bundle times: give those extra margin.
 
 | unit | smoke (s) | full size (est.) |
 |---|---|---|

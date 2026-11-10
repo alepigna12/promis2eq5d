@@ -28,7 +28,7 @@ test_that("util_band follows the pipeline rule", {
   }
 })
 test_that("the folds of p2e_training are valid for K = 10", {
-  d <- .training_data(); d$ID <- seq_len(nrow(d)); d$util_band <- .util_band(as.matrix(d[DIMS]), d$country)
+  d <- .training_data(); d$util_band <- .util_band(as.matrix(d[DIMS]), d$country)
   f <- make_cv_folds(d, v = 10, seed = 20261110L)$fold
   expect_setequal(f, 1:10); expect_lte(diff(range(tabulate(f, 10))), 1)
 })

@@ -13,8 +13,6 @@ file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
 here <- if (length(file_arg)) dirname(normalizePath(sub("^--file=", "", file_arg[1]))) else "data-raw/train"
 source(file.path(here, "units.R"))
 
-`%||%` <- function(a, b) if (is.null(a)) b else a
-
 # ---- arguments ---------------------------------------------------------------
 parse_args <- function(a) {
   if (!length(a)) stop("usage: train.R <list|cv|select|bundle|collect> --out <dir> ...", call. = FALSE)
@@ -30,7 +28,10 @@ parse_args <- function(a) {
       if (k == "--out") o$out <- v
       if (k == "--tscore-table") o$table <- v
       if (k == "--commit") o$commit <- v
-      if (k == "--dirty") o$dirty <- as.logical(as.integer(v))
+      if (k == "--dirty") {
+        if (!v %in% c("0", "1")) stop("--dirty must be 0 or 1, not '", v, "'", call. = FALSE)
+        o$dirty <- v == "1"
+      }
       i <- i + 2L; next
     }
     if (startsWith(k, "--")) stop("unknown option ", k, call. = FALSE)
@@ -98,7 +99,7 @@ load_train <- function(need_tscores) {
     n <- nrow(train)
     stratum <- paste(train$country, train$util_band)
     key <- numeric(n)
-    withr::with_seed(TRAIN_SEED, {
+    promis2eq5d:::.with_fit_seed(TRAIN_SEED, {
       for (idx in split(seq_len(n), stratum)) {
         len <- length(idx)
         key[idx[sample.int(len)]] <- (seq_len(len) - 0.5) / len   # random rank within the stratum
@@ -116,12 +117,9 @@ load_train <- function(need_tscores) {
   train
 }
 
-# Folds by country x util_band, from the row order (p2e_training has no ID
-# column, which make_cv_folds() would echo back, so an ID is added to a copy)
+# Folds by country x util_band, from the row order
 train_folds <- function(train) {
-  d <- train
-  d$ID <- seq_len(nrow(d))
-  promis2eq5d:::make_cv_folds(d, v = K_FOLDS, seed = TRAIN_SEED)$fold
+  promis2eq5d:::make_cv_folds(train, v = K_FOLDS, seed = TRAIN_SEED)$fold
 }
 
 # ---- stages ------------------------------------------------------------------
@@ -187,7 +185,7 @@ selected_table <- function() {
                             variant_json = variant_json(variants[[sel$variant_id]]),
                             mae = sel$mae, tie_metric = sel$tie_metric,
                             n_candidates = sel$n_candidates, n_tied = sel$n_tied,
-                            stringsAsFactors = FALSE)
+                            smoke = SMOKE, stringsAsFactors = FALSE)
   }
   do.call(rbind, rows)
 }
@@ -201,8 +199,15 @@ stage_select <- function() {
 
 stage_bundle <- function() {
   need_out()
+  if (!SMOKE && (is.na(opt$commit) || !nzchar(opt$commit) || is.na(opt$dirty))) {
+    stop("bundle without --smoke needs both --commit <sha> and --dirty 0|1", call. = FALSE)
+  }
   options(promis2eq5d.repo_commit = opt$commit, promis2eq5d.repo_dirty = opt$dirty)
   sel <- utils::read.csv(file.path(opt$out, "selected.csv"), stringsAsFactors = FALSE, na.strings = "NA")
+  if (!"smoke" %in% names(sel) || !all(sel$smoke == SMOKE)) {
+    stop("selected.csv was made with a different smoke setting than this run (smoke = ", SMOKE, ")",
+         call. = FALSE)
+  }
   all_ids <- bundle_unit_ids()
   ids <- opt$ids
   if (!length(ids)) ids <- all_ids
@@ -241,21 +246,33 @@ stage_collect <- function() {
   rows <- lapply(seq_len(nrow(cells)), function(i) {
     file <- promis2eq5d:::.bundle_file(cells$method[i], cells$set[i], cells$target[i])
     p <- file.path(opt$out, "fits", file)
-    vid <- if (is.null(s)) NA_integer_ else s$variant_id[i]
+    vid <- NA_integer_
+    if (!is.null(s)) {
+      tm <- if (is.na(cells$target[i])) is.na(s$target) else (!is.na(s$target) & s$target == cells$target[i])
+      r <- s[s$method == cells$method[i] & s$set == cells$set[i] & tm, ]
+      if (nrow(r) == 1L) vid <- r$variant_id
+    }
+    B <- boot_b(cells$method[i])
     if (!file.exists(p)) {
-      return(data.frame(file = file, converged = NA, attempted = NA, failed = NA, variant_id = vid,
-                        xz_MB = NA, seconds = NA, warnings = NA))
+      return(data.frame(file = file, B = B, converged = NA, short = NA, attempted = NA, failed = NA,
+                        variant_id = vid, xz_MB = NA, seconds = NA, warnings = NA))
     }
     b <- readRDS(p)
     lg <- file.path(opt$out, "bundle_logs", file)
     l <- if (file.exists(lg)) readRDS(lg) else list(seconds = NA_real_, warnings = NA)
-    data.frame(file = file, converged = length(b$boot), attempted = b$boot_attempted,
+    data.frame(file = file, B = B, converged = length(b$boot), short = length(b$boot) < B, attempted = b$boot_attempted,
                failed = b$boot_failed, variant_id = vid,
                xz_MB = round(file.size(p) / 1e6, 3), seconds = round(l$seconds, 1),
                warnings = length(l$warnings), stringsAsFactors = FALSE)
   })
   tab <- do.call(rbind, rows)
   print(tab, row.names = FALSE)
+  if (any(tab$short %in% TRUE)) {
+    cat("
+SHORT: converged < B for", sum(tab$short %in% TRUE), "bundle(s):",
+        paste(tab$file[tab$short %in% TRUE], collapse = ", "), "
+")
+  }
   shipped <- cells$method != "R09_chain"
   cat(sprintf("\n%d of %d bundles present; CRAN-shipped bundles (all but R09_chain): %.3f MB (xz)\n",
               sum(!is.na(tab$xz_MB)), nrow(tab), sum(tab$xz_MB[shipped], na.rm = TRUE)))
