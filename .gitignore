@@ -9,3 +9,5 @@ handoff-*.md
 /data/*
 !/data/p2e_training.rda
 /output/
+/data-raw/slurm/cluster.env
+/slurm_logs/

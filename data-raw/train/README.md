@@ -60,3 +60,49 @@ which adds to R06 and R09 bundle times: give those extra margin.
 
 R06 bundles dominate: give them their own long `--time`. Whole smoke run: cv about 3 min,
 select seconds, bundle about 8 min.
+
+## Running on the JHPCE cluster
+
+Scripts: `data-raw/slurm/submit.sh`, `array.sh`, `cluster.env.example` (adapted from the
+iHEA_2027 cluster scripts). Nothing is fitted on the login node: `submit.sh` only runs
+`train.R list <stage>` (it prints ids, a few seconds) and `sbatch`.
+
+**Setup (once).**
+1. Clone over SSH and switch to the branch:
+   `git clone git@github.com:alepigna12/promis2eq5d.git ~/research/promis2eq5d`, then
+   `cd ~/research/promis2eq5d && git checkout pkg-train`.
+2. Install in an interactive session, not on the login node: `srun --pty bash`, then
+   `module load conda_R/4.5`, then `R CMD INSTALL --no-multiarch .` into the user library,
+   after installing the package's Suggests there too (`install.packages()` on the list in
+   `DESCRIPTION`; some may compile from source).
+3. In the same session, run the per-file tests that need no fits (for example
+   `Rscript -e 'testthat::test_file("tests/testthat/test-selection.R")'`, and likewise for
+   the other files that need no fitted bundles).
+4. Copy the licensed T-score table into your own account, outside the repo, and lock it:
+   `chmod go-rwx <file>`. Never commit it.
+5. `cp data-raw/slurm/cluster.env.example data-raw/slurm/cluster.env` (gitignored) and set
+   `TSCORE_TABLE` (and `PROJECT_DIR` if the clone is elsewhere). `OUT` is on fastscratch.
+   `TIME_*` are 3 x the projected time of the stage's slowest unit (R06 bundles set
+   `TIME_BUNDLE`); `MEM_*` were not measured, so check `sacct` MaxRSS after the cv stage.
+
+**Run order.** For each stage run the dry-run, read it, then submit, as two separate
+commands. A stage starts only after the previous one has finished (`squeue -u $USER`
+is empty).
+```
+DRY_RUN=1 data-raw/slurm/submit.sh cv
+data-raw/slurm/submit.sh cv                # 153 array tasks, one unit each
+DRY_RUN=1 data-raw/slurm/submit.sh select
+data-raw/slurm/submit.sh select            # a one-element array running `train.R select`
+DRY_RUN=1 data-raw/slurm/submit.sh bundle
+data-raw/slurm/submit.sh bundle            # 23 array tasks, one bundle each
+DRY_RUN=1 data-raw/slurm/submit.sh collect
+data-raw/slurm/submit.sh collect           # one-element array; the table is in the slurm log
+```
+`SMOKE=1` in front of any of these runs the smoke variant. Logs are in `slurm_logs/`
+(`p2e_<stage>_<jobid>_<index>.out`); the submit lists are in `$OUT/submit/`. Each task passes
+`--commit` and `--dirty` from the cluster checkout (`git rev-parse HEAD`, `git status`), so
+keep the checkout clean while the bundle stage runs. `submit.sh` runs `list` before the
+dry-run prints, so even a dry-run writes a list file.
+
+**Afterwards.** fastscratch purges files after 30 days and has no backup: copy `$OUT/fits`
+and `$OUT/selected.csv` (and the `slurm_logs`) to your own storage as soon as `collect` is done.
