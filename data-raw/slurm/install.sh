@@ -51,8 +51,13 @@ lib <- commandArgs(trailingOnly = TRUE)[1]
 floors <- c(eq5d = "0.17.0", withr = "0", glmnet = "0", MASS = "0", Matrix = "0",
             ordinal = "0", pbivnorm = "0", quantreg = "0", testthat = "3.2.0",
             tibble = "0", xgboost = "3.2.0")
-ok <- function(p) requireNamespace(p, quietly = TRUE) &&
-  utils::packageVersion(p) >= floors[[p]]
+# Read the installed version from the libraries without loading the package: a
+# loaded namespace would keep reporting the old version after an upgrade.
+ver <- function(p) {
+  v <- suppressWarnings(utils::packageDescription(p, lib.loc = .libPaths(), fields = "Version"))
+  if (is.na(v)) NA_character_ else v
+}
+ok <- function(p) !is.na(ver(p)) && package_version(ver(p)) >= floors[[p]]
 need <- names(floors)[!vapply(names(floors), ok, logical(1))]
 if (length(need)) {
   message("installing: ", paste(need, collapse = ", "))
@@ -60,7 +65,7 @@ if (length(need)) {
 }
 still <- names(floors)[!vapply(names(floors), ok, logical(1))]
 if (length(still)) stop("still missing or too old: ", paste(still, collapse = ", "))
-for (p in names(floors)) message(sprintf("  %-9s %s", p, utils::packageVersion(p)))
+for (p in names(floors)) message(sprintf("  %-9s %s", p, ver(p)))
 EOF
 
 R CMD INSTALL --no-multiarch --library="$LIB" .
