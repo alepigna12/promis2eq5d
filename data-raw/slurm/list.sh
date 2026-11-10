@@ -36,6 +36,11 @@ if [ -n "${R_MODULE:-}" ]; then
   set -u
 fi
 command -v Rscript >/dev/null 2>&1 || { echo "Rscript not found: set R_MODULE in $env_file" >&2; exit 1; }
+
+# Put the R user library (where install.sh put promis2eq5d and its dependencies) first
+# on R_LIBS, which every R process inherits, child processes included
+R_USER_LIB=$(Rscript -e 'cat(path.expand(Sys.getenv("R_LIBS_USER")))')
+export R_LIBS="$R_USER_LIB${R_LIBS:+:$R_LIBS}"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 
 smoke_opt=()

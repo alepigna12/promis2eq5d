@@ -2,8 +2,8 @@
 #SBATCH --job-name=p2e_install
 #SBATCH --partition=shared
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=8G
-#SBATCH --time=02:00:00
+#SBATCH --mem=4G
+#SBATCH --time=01:00:00
 #SBATCH --output=slurm_logs/p2e_install_%j.out
 #
 # Installs this checkout of promis2eq5d, and the packages the training run and its
@@ -12,9 +12,10 @@
 #
 # Never on the login node. From the repo root, either as a batch job:
 #   mkdir -p slurm_logs
-#   sbatch data-raw/slurm/install.sh
-# or inside an interactive session:
-#   srun --pty --cpus-per-task=1 --mem=8G --time=02:00:00 bash
+#   sbatch --job-name=p2e_install --partition=shared --cpus-per-task=1 --mem=4G #     --time=00:20:00 --output=slurm_logs/p2e_install_%j.out data-raw/slurm/install.sh
+# (20 min once the dependencies are installed; the first run, which may compile
+# some from source, needs about 1 h) or inside an interactive session:
+#   srun --pty --cpus-per-task=1 --mem=4G --time=00:20:00 bash
 #   data-raw/slurm/install.sh
 #
 # R_MODULE defaults to conda_R/4.5 (as in cluster.env.example).
@@ -40,8 +41,14 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 # The user library, created if missing (install.packages() would otherwise ask)
 LIB=$(Rscript -e 'cat(path.expand(Sys.getenv("R_LIBS_USER")))')
 mkdir -p "$LIB"
+# R_LIBS, unlike R_LIBS_USER, reaches the process R CMD INSTALL starts to test-load
+# the package, which must find the Imports installed below
+export R_LIBS="$LIB${R_LIBS:+:$R_LIBS}"
 echo "R: $(Rscript -e 'cat(R.version.string)')"
 echo "user library: $LIB"
+echo "library paths:"
+Rscript -e 'cat(paste0("  ", .libPaths()), sep = "
+")'
 
 # Dependencies: Imports and Suggests from DESCRIPTION. Only missing or too-old
 # packages are installed; the module may already provide some.
