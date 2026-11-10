@@ -42,6 +42,11 @@
   K <- max(shipped$fold_id)
 
   train <- as.data.frame(.training_data())
+  miss <- setdiff(.digest_cols(), names(train))
+  if (length(miss)) {
+    stop("the training data do not match the rows the shipped fits were trained on (missing column(s) ",
+         paste(miss, collapse = ", "), "); retrain needs the shipped p2e_training", call. = FALSE)
+  }
   digest <- .data_digest(train)
   if (!identical(digest, shipped$meta$train_digest)) {
     stop("the training data do not match the rows the shipped fits were trained on (digest ", digest,

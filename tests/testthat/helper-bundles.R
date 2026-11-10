@@ -52,7 +52,7 @@ stand_in_bundle <- function(method, set, target = NA) {
     m <- .p2e_method(method)
     train <- make_synthetic_data(400, seed = 1, countries = c("DE", "UK"))
     b <- .fit_bundle(m, train, set, target, .p2e_method_variants(m, set)[[1]], K = 3, B = 4, seed = 1)
-    saveRDS(b, file.path(.stand_in_env$dir, paste0(key, ".rds")))
+    saveRDS(b, file.path(.stand_in_env$dir, .bundle_file(method, set, target)))
     .stand_in_env[[key]] <- b
   }
   .stand_in_env[[key]]

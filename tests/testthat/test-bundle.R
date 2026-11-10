@@ -52,9 +52,16 @@ test_that("a fit() that returns NULL is a replaced replicate with a reason", {
   expect_equal(b$boot_failures$b, 2L); expect_identical(b$boot_failures$reason, "fit() returned NULL")
 })
 test_that(".boot_index does not depend on the collation locale", {
-  country <- rep(c("b", "B", "a", "A", "C"), length.out = 60)
-  ref <- withr::with_seed(3, .boot_index(country, 60))
-  expect_identical(withr::with_collate("C", withr::with_seed(3, .boot_index(country, 60))), ref)
+  country <- rep(c("b", "B", "a", "A"), length.out = 60)
+  # strata in radix (C) order: A, B, a, b, whatever the locale or the test context
+  hand <- withr::with_seed(3, unlist(lapply(c("A", "B", "a", "b"), function(g) {
+    w <- which(country == g); w[sample.int(length(w), length(w), replace = TRUE)]
+  })))
+  expect_identical(withr::with_collate("C", withr::with_seed(3, .boot_index(country, 60))), hand)
+  loc <- if (.Platform$OS.type == "windows") "English_United States.1252" else "en_US.UTF-8"
+  other <- tryCatch(withr::with_collate(loc, sort(c("a", "B"))), error = function(e) "B", warning = function(w) "B")
+  skip_if(identical(other, c("B", "a")), "no locale that collates differently from C")
+  expect_identical(withr::with_collate(loc, withr::with_seed(3, .boot_index(country, 60))), hand)
 })
 test_that("progress shows the attempt and how many have converged", {
   m <- toy_method(); m$fit <- local({ f <- m$fit; n <- 0L

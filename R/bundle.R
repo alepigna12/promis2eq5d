@@ -37,10 +37,12 @@ BUNDLE_FORMAT <- 2L
        ihea_tag = IHEA_TAG, r_version = R.version.string, pkg_versions = ver, created = Sys.time())
 }
 
+.digest_cols <- function() c(ITEMS, "P9", "AGE", "female", "country", DIMS)
+
 # The md5 of the training rows a bundle was fitted on: the predictors, covariates,
 # country and outcome dimensions as a plain data frame (saveRDS, version 3)
 .data_digest <- function(train) {
-  d <- as.data.frame(train)[c(ITEMS, "P9", "AGE", "female", "country", DIMS)]
+  d <- as.data.frame(train)[.digest_cols()]
   rownames(d) <- NULL
   f <- tempfile(fileext = ".rds")
   on.exit(unlink(f), add = TRUE)
@@ -331,7 +333,7 @@ BUNDLE_FORMAT <- 2L
   if (!identical(b$meta$format, BUNDLE_FORMAT)) {
     fmt <- if (is.null(b$meta$format)) "none" else format(b$meta$format)
     stop("fit bundle '", file, "' has format ", fmt, "; this version of promis2eq5d needs format ",
-         BUNDLE_FORMAT, ": reinstall promis2eq5d, run p2e_download() again, or delete the cached refit",
+         BUNDLE_FORMAT, ": reinstall promis2eq5d, run p2e_download() again, or replace the file in the folder set by options(promis2eq5d.fit_dir)",
          call. = FALSE)
   }
   invisible(b)

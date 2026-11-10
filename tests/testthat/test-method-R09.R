@@ -84,7 +84,7 @@ test_that("R09 blocked Monte Carlo mean: deterministic, shaped, and equal to the
 test_that("a saved R09 bundle is small, and reloading it simulates identically (raw boosters)", {
   skip_if_not_installed("xgboost")
   b <- stand_in_bundle("R09_chain", "S3"); nd <- make_synthetic_data(5, 2)
-  f <- file.path(getOption("promis2eq5d.fit_dir"), "R09_chain_S3_any.rds")
+  f <- file.path(getOption("promis2eq5d.fit_dir"), .bundle_file("R09_chain", "S3", NA))
   expect_true(file.exists(f))
   expect_lt(file.size(f), 5e6)
   b2 <- readRDS(f); m <- .p2e_method("R09")

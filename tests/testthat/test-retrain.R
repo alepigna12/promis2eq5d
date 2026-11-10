@@ -227,3 +227,11 @@ test_that("an old-format cached refit is refitted with a message", {
   expect_false(any(grepl("Using cached refit", msgs)))
   expect_identical(r$meta$format, 2L); expect_identical(readRDS(path)$meta$format, 2L)
 })
+
+test_that("retrain data that lack a digest column are reported as not matching", {
+  d <- retrain_data(); d$AGE <- NULL
+  withr::local_options(promis2eq5d.training_data = d, promis2eq5d.cache_dir = withr::local_tempdir())
+  stand_in_bundle("D03_clad", "S1", "UK")
+  expect_error(.retrain_bundle("D03", "S1", p2e_value_set("USA"), mode = "mean", cache = FALSE),
+               "do not match the rows the shipped fits.*missing column.*AGE.*p2e_training")
+})
