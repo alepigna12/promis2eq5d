@@ -37,10 +37,14 @@ test_that("table validation: duplicates, unknown domains, NA, non-data-frame, no
   expect_error(p2e_tscores(d, "x"), "data frame")
   expect_error(p2e_tscores(d, fake_table()[0, ]), "no rows")
 })
-test_that("a table with missing item columns is an error naming them", {
+test_that("a table with missing item columns is an error naming them in p2e_tscores()", {
   d <- as.data.frame(as.list(setNames(rep(2, 28), ITEM_IDS))); d$Global07 <- 3; d$age <- 50; d$female <- 1
   d$PFA11 <- NULL
-  expect_error(.standardise_input(d, fake_table()), "PFA11")
+  expect_error(p2e_tscores(d, fake_table()), "PFA11")
+  # .standardise_input applies the table only with all 28 items (ruling FR-I7);
+  # predict_eq5d() reports the missing items if no usable set remains
+  std <- .standardise_input(d, fake_table())
+  expect_false(any(TSCORES %in% names(std)))
 })
 test_that("three rows keep their order across all seven T-scores", {
   d <- as.data.frame(as.list(setNames(rep(2, 28), ITEM_IDS)))[rep(1, 3), ]
