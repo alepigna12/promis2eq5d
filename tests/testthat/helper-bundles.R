@@ -39,8 +39,14 @@ toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3, bad_call = NULL,
 
 .stand_in_env <- new.env()
 
+# A small R09 variant for the stand-in bundle: the default (first) grid
+# configuration fits 57 rounds at depth 6, too slow and large for tests
+R09_TEST_VARIANT <- list(eta = 0.3, max_depth = 2, subsample = 1, colsample_bytree = 1,
+                         min_child_weight = 1, nrounds = 10)
+
 # A cached bundle fitted on synthetic data (K = 3, B = 4, seed 1, first
-# variant), written to a session temp directory that becomes promis2eq5d.fit_dir.
+# variant; R09_TEST_VARIANT for R09_chain), written to a session temp
+# directory that becomes promis2eq5d.fit_dir.
 stand_in_bundle <- function(method, set, target = NA) {
   key <- paste(method, set, if (is.na(target)) "any" else target, sep = "_")
   if (is.null(.stand_in_env$dir)) {
@@ -51,7 +57,8 @@ stand_in_bundle <- function(method, set, target = NA) {
   if (is.null(.stand_in_env[[key]])) {
     m <- .p2e_method(method)
     train <- make_synthetic_data(400, seed = 1, countries = c("DE", "UK"))
-    b <- .fit_bundle(m, train, set, target, .p2e_method_variants(m, set)[[1]], K = 3, B = 4, seed = 1)
+    v <- if (m$id == "R09_chain") R09_TEST_VARIANT else .p2e_method_variants(m, set)[[1]]
+    b <- .fit_bundle(m, train, set, target, v, K = 3, B = 4, seed = 1)
     saveRDS(b, file.path(.stand_in_env$dir, .bundle_file(method, set, target)))
     .stand_in_env[[key]] <- b
   }

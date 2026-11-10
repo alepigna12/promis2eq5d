@@ -16,10 +16,10 @@ test_that("R09 is registered with the interface fields and its fit carries set a
   expect_identical(m$id, "R09_chain"); expect_identical(m$family, "response")
   expect_identical(m$sets, c("S3", "S1", "S4", "S2"))
   expect_identical(m$needs, "xgboost"); expect_identical(m$predict_needs, "xgboost")
-  expect_identical(m$variants[[1]], list(eta = 0.3, max_depth = 2, subsample = 1,
-                                         colsample_bytree = 1, min_child_weight = 1, nrounds = 10))
+  expect_identical(.p2e_method_variants(m, "S3"), .r09_configs())
+  expect_true(is.function(m$logp))
   b <- stand_in_bundle("R09_chain", "S3")
-  expect_identical(b$point$set, "S3"); expect_identical(b$point$variant, m$variants[[1]])
+  expect_identical(b$point$set, "S3"); expect_identical(b$point$variant, R09_TEST_VARIANT)
   expect_identical(b$point$order, c("E4", "E1", "E3", "E2", "E5"))
 })
 test_that("R09 marginals rows sum to 1", {
@@ -98,4 +98,16 @@ test_that("a reloaded booster predicts with one thread", {
   b <- stand_in_bundle("R09_chain", "S3")
   bst <- .r09_boosters(b$point)[[1]]
   expect_identical(as.integer(xgboost::xgb.config(bst)$learner$generic_param$nthread), 1L)
+})
+test_that("R09 logp is a log-probability over the 3,125 profiles and checks the levels", {
+  skip_if_not_installed("xgboost")
+  b <- stand_in_bundle("R09_chain", "S3"); m <- .p2e_method("R09")
+  nd <- make_synthetic_data(2, 2)[rep(1, 3125), ]
+  st <- as.matrix(expand.grid(E5 = 1:5, E4 = 1:5, E3 = 1:5, E2 = 1:5, E1 = 1:5)[, 5:1])
+  nd[DIMS] <- st
+  lp <- m$logp(b$point, nd)
+  expect_length(lp, 3125L); expect_true(all(lp <= 0))
+  expect_equal(sum(exp(lp)), 1, tolerance = 1e-6)
+  nd$E3[1] <- 6L
+  expect_error(m$logp(b$point, nd[1:2, ]), "integers 1-5")
 })

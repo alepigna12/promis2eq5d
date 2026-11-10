@@ -14,9 +14,22 @@
 # task_grid, tasks, twin_failures, twopart, value_sets), then the model files
 # R/functions/models/*.R (alphabetical; each calls register_method()).
 # Nothing extracted is copied into the package.
+#
+# Selection fixture (Plan 2, Task 4): pipeline_selection.rds holds the pipeline's
+# ml_configs("xgb"), the row .select_cell() selects from three made-up metric
+# tables, crps_draws() on a fixed 5 x 200 draw matrix, and the R09 profile
+# probabilities of the first 5 newdata rows of the pipeline_R09.rds fit (refitted
+# from that fixture's train, set, variant and seed). The pipeline's CRPS needs the
+# scoringRules package on the normal library (1.1.3, as in iHEA's renv.lock).
+# A third argument `selection` builds this fixture only and leaves the four
+# method fixtures untouched:
+#   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 Rscript data-raw/pipeline_fixtures.R <iHEA repo> tests/testthat/fixtures selection
 
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) != 2) stop("usage: Rscript pipeline_fixtures.R <iHEA repo> <output dir>")
+if (!length(args) %in% 2:3 || (length(args) == 3 && args[3] != "selection")) {
+  stop("usage: Rscript pipeline_fixtures.R <iHEA repo> <output dir> [selection]")
+}
+only_selection <- length(args) == 3
 repo <- normalizePath(args[1], winslash = "/", mustWork = TRUE)
 outdir <- normalizePath(args[2], winslash = "/", mustWork = TRUE)
 tag <- "freeze-ihea2027-abstract-v3"
@@ -62,6 +75,9 @@ save_fx <- function(id, set, variant, core, mean, u) {
   saveRDS(fx, file.path(outdir, paste0("pipeline_", substr(id, 1, 3), ".rds")), version = 3)
 }
 
+# The four method fixtures (skipped with `selection`; the block is not indented,
+# so the Plan 1 code below reads unchanged)
+if (!only_selection) {
 ## R06: mean = predict_model(mean) under set.seed(12); draws = predict_model(draws, M) under set.seed(11)
 v <- list(form = "conceptual")
 f <- fit_pipeline("R06_mvop_dim", mkspec("R06_mvop_dim", "S1", v))
@@ -93,3 +109,66 @@ mu <- as.numeric(env$predict_model(f, newdata, vt, "mean"))
 set.seed(seed); u <- unname(env$predict_model(f, newdata, vt, "draws", M = M)$u)
 save_fx("D12_klapproth", "S3K", v, core, mu, u)
 cat("fixtures written to", outdir, "\n")
+}
+
+## Selection fixture (see the header)
+# (a) the R09 grid
+ml <- env$ml_configs("xgb")
+
+# (b) three made-up metric tables in the package's form (variant_id, ok, mae,
+# tie_metric), selected by the pipeline's .select_cell() on the ok rows (the
+# pipeline's candidates are the usable units). tie_metric is cv_neglogp for a
+# response cell and cv_crps for a direct cell.
+tables <- list(
+  # no tie: the lowest-MAE row (id 2) failed; id 3 wins over id 4 (0.005 apart)
+  data.frame(variant_id = 1:4, ok = c(TRUE, FALSE, TRUE, TRUE), mae = c(0.120, 0.100, 0.110, 0.115),
+             tie_metric = c(2.0, 1.0, 3.0, 1.5)),
+  # two-way tie at the 0.0005 boundary (ids 1, 2); id 3 (0.0006 above) is not tied
+  data.frame(variant_id = 1:5, ok = TRUE, mae = c(0.1000, 0.1005, 0.1006, 0.1200, 0.1300),
+             tie_metric = c(0.30, 0.25, 0.10, 0.05, 0.01)),
+  # three-way tie (ids 7, 4, 9): 7 and 4 share tie_metric and MAE, so variant_id decides
+  data.frame(variant_id = c(7L, 4L, 9L, 2L, 5L), ok = TRUE, mae = c(0.2002, 0.2002, 0.2000, 0.2100, 0.2500),
+             tie_metric = c(1.0, 1.0, 1.2, 0.1, 0.5))
+)
+families <- c("response", "direct", "response")
+pipeline_select <- function(tab, family) {
+  d <- tab[tab$ok, , drop = FALSE]
+  resp <- family == "response"
+  cells <- data.frame(scenario = "holdout_UK", method = "m", set = "S3", arm = if (resp) "none" else "rescored",
+                      train_vt = if (resp) NA_character_ else "UK", cw_weights = NA_character_, family = family,
+                      variant_id = d$variant_id, cv_mae = d$mae,
+                      cv_neglogp = if (resp) d$tie_metric else NA_real_,
+                      cv_crps = if (resp) NA_real_ else d$tie_metric, stringsAsFactors = FALSE)
+  env$.select_cell(cells)
+}
+picked <- Map(pipeline_select, tables, families)
+
+# (c) CRPS on a fixed 5 x 200 draw matrix, with mass at full health and a draw equal to y
+set.seed(20261110)
+crps_draws <- matrix(round(runif(1000, -0.2, 1), 3), 5, 200)
+crps_draws[1:2, 1:60] <- 1
+crps_y <- c(1, 0.9, 0.5, -0.1, crps_draws[5, 17])
+crps <- as.numeric(env$crps_draws(crps_y, crps_draws))
+
+# (d) R09 profile probabilities of the pipeline_R09.rds fit on its first 5 newdata rows
+r09 <- readRDS(file.path(outdir, "pipeline_R09.rds"))
+if (!identical(r09$train, train)) stop("pipeline_R09.rds was built from another train; rebuild it first")
+spec <- mkspec("R09_chain", r09$set, r09$variant)
+set.seed(r09$fit_seed)
+f <- env$METHODS$R09_chain$fit(r09$train, spec)
+f$spec <- spec
+class(f) <- c("R09_chain", "mapfit")
+nd5 <- r09$newdata[1:5, , drop = FALSE]
+obs <- matrix(as.integer(as.matrix(nd5[env$DIMS])), ncol = 5)
+r09_prob <- as.numeric(env$METHODS$R09_chain$profile_prob(f, nd5, obs))
+r09_logp <- as.numeric(env$log_profile_prob(f, nd5))
+
+fx <- list(ml_configs = ml, tables = tables, families = families,
+           selected = lapply(picked, function(s) s$variant_id),
+           n_tied = vapply(picked, function(s) as.integer(s$n_tied), 1L),
+           n_candidates = vapply(picked, function(s) as.integer(s$n_candidates), 1L),
+           crps_y = crps_y, crps_draws = crps_draws, crps = crps,
+           r09_rows = 1:5, r09_prob = r09_prob, r09_logp = r09_logp,
+           scoringRules = as.character(utils::packageVersion("scoringRules")))
+saveRDS(fx, file.path(outdir, "pipeline_selection.rds"), version = 3)
+cat("selection fixture written to", outdir, "\n")

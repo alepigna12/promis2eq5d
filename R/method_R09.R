@@ -1,4 +1,4 @@
-# Ported from iHEA_2027 R/functions/models/R09_chain.R at freeze-ihea2027-abstract-v3 (a79e102); changes: constructor .method_R09() instead of register_method(); ML_THREADS replaced by the literal nthread = 1; ml_configs and the variant search not ported (variants[[1]] is a stand-in, Plan 2 supplies the selected variant); .r09_state_probs, .r09_profile_prob and R09_CHUNK not ported (R09_EXACT_MEAN = FALSE is in constants.R); fit() adds $set and $variant; each booster is stored as xgboost's portable raw model (ubj) and rebuilt for prediction (.r09_boosters), so a saved fit loads across xgboost versions and holds no external pointer; simulate() takes a key (K units, uniforms matrix(runif(K * M), K, M)[key, ]; key = seq_len(n) consumes the RNG as the pipeline); mean_utility() takes a p2e_vs value set and runs under withr::with_seed(MC_SEED) with pinned RNG kinds; marginals() added (level frequencies of the same N_MC_MEAN profiles); mean_utility() and marginals() process rows in blocks of R09_MEAN_BLOCK = 500 inside one MC_SEED stream (the Monte Carlo stream differs from an unblocked run for n > 500; simulate() is unchanged, and simulate with key = seq_len(n) is the pipeline-equivalent path); the conditional probabilities, chain order and sparse-level handling unchanged
+# Ported from iHEA_2027 R/functions/models/R09_chain.R at freeze-ihea2027-abstract-v3 (a79e102); changes: constructor .method_R09() instead of register_method(); ML_THREADS replaced by the literal nthread = 1; the variants are .r09_configs(), a port of ml_configs("xgb") (R/functions/ml_configs.R lines 25-42, n = 30, seed 20261020; the first configuration is the default) with its RNG kinds pinned by .with_fit_seed(); .r09_state_probs and R09_CHUNK not ported (R09_EXACT_MEAN = FALSE is in constants.R); .r09_profile_prob (lines 155-166) ported with the boosters rebuilt once per call, and logp() added from log_profile_prob (R/functions/model_interface.R lines 470-478: the observed E1-E5 levels, the probability floored at 1e-12 before the log); fit() adds $set and $variant; each booster is stored as xgboost's portable raw model (ubj) and rebuilt for prediction (.r09_boosters), so a saved fit loads across xgboost versions and holds no external pointer; simulate() takes a key (K units, uniforms matrix(runif(K * M), K, M)[key, ]; key = seq_len(n) consumes the RNG as the pipeline); mean_utility() takes a p2e_vs value set and runs under withr::with_seed(MC_SEED) with pinned RNG kinds; marginals() added (level frequencies of the same N_MC_MEAN profiles); mean_utility() and marginals() process rows in blocks of R09_MEAN_BLOCK = 500 inside one MC_SEED stream (the Monte Carlo stream differs from an unblocked run for n > 500; simulate() is unchanged, and simulate with key = seq_len(n) is the pipeline-equivalent path); the conditional probabilities, chain order and sparse-level handling unchanged
 
 # R09: classifier chain (xgboost, objective multi:softprob, num_class 5;
 # spec sec. 5.2, R9). In the fixed order R09_ORDER, E4 -> E1 -> E3 -> E2 -> E5,
@@ -24,16 +24,35 @@
 # N_MC_MEAN simulated profiles (blocks of R09_MEAN_BLOCK rows). simulate is sequential: in chain order, one
 # n x M block of uniforms per dimension, each draw cut at the conditional of
 # its own sampled earlier levels (predicted once per distinct person x
-# earlier levels).
+# earlier levels). logp: log P(observed profile | x), the product of the five
+# conditionals at the row's own earlier levels, floored at 1e-12.
+# Variants: the R09_BUDGET random-search configurations of .r09_configs(),
+# the same for every set; one configuration applies to all five classifiers.
 
 R09_ORDER <- c("E4", "E1", "E3", "E2", "E5")
+R09_BUDGET <- 30L            # configurations (the pipeline's ML_BUDGET)
+R09_CONFIG_SEED <- 20261020L # their seed (the pipeline's ML_SEED)
+
+# The xgboost random-search grid: eta 0.01-0.3 log-uniform, max_depth 2-8,
+# subsample 0.5-1, colsample_bytree 0.5-1, min_child_weight 1-10, nrounds
+# 50-1000; drawn under R09_CONFIG_SEED with pinned RNG kinds, so the caller's
+# stream is untouched and every call gives the same list
+.r09_configs <- function() {
+  .with_fit_seed(R09_CONFIG_SEED, {
+    lapply(seq_len(R09_BUDGET), function(i) list(eta = exp(stats::runif(1, log(0.01), log(0.3))),
+                                                 max_depth = sample(2:8, 1),
+                                                 subsample = stats::runif(1, 0.5, 1),
+                                                 colsample_bytree = stats::runif(1, 0.5, 1),
+                                                 min_child_weight = stats::runif(1, 1, 10),
+                                                 nrounds = sample(50:1000, 1)))
+  })
+}
 
 .method_R09 <- function() {
   list(
     id = "R09_chain", family = "response",
     sets = METHOD_INFO$R09_chain$sets,
-    variants = list(list(eta = 0.3, max_depth = 2, subsample = 1, colsample_bytree = 1,
-                         min_child_weight = 1, nrounds = 10)),
+    variants = function(set) .r09_configs(),
     aliases = c("R09", "chain"),
     needs = "xgboost",
     predict_needs = "xgboost",
@@ -45,8 +64,36 @@ R09_ORDER <- c("E4", "E1", "E3", "E2", "E5")
     },
     simulate = function(fit, newdata, M, key) .r09_simulate(fit, newdata, M, key),
     mean_utility = function(fit, newdata, vs) .r09_mean_utility(fit, newdata, vs),
-    marginals = function(fit, newdata) .r09_marginals(fit, newdata)
+    marginals = function(fit, newdata) .r09_marginals(fit, newdata),
+    logp = function(fit, newdata) .r09_logp(fit, newdata)
   )
+}
+
+# Probability of each row's profile (n x 5 levels, DIMS order): the product of
+# the conditionals at the profile's own earlier levels
+.r09_profile_prob <- function(fit, newdata, profiles) {
+  X <- .r09_x(newdata, fit$set)
+  n <- nrow(X)
+  if (n != nrow(profiles)) stop("profiles must have one row per row of newdata")
+  bs <- .r09_boosters(fit)
+  obs <- profiles[, match(fit$order, DIMS), drop = FALSE]
+  p <- rep(1, n)
+  for (k in seq_along(fit$order)) {
+    p <- p * .r09_cond(fit, k, X, obs[, seq_len(k - 1L), drop = FALSE], bs)[cbind(seq_len(n), obs[, k])]
+  }
+  p
+}
+
+# log P(observed E1-E5 profile | x) per row of newdata, floored at 1e-12
+.r09_logp <- function(fit, newdata) {
+  miss <- setdiff(DIMS, names(newdata))
+  if (length(miss)) stop("R09_chain logp: newdata has no ", paste(miss, collapse = ", "))
+  obs <- as.matrix(newdata[DIMS])
+  if (!is.numeric(obs) || anyNA(obs) || !all(obs %in% 1:5)) {
+    stop("R09_chain logp: the E1-E5 levels must be integers 1-5")
+  }
+  obs <- matrix(as.integer(obs), ncol = 5)
+  log(pmax(.r09_profile_prob(fit, newdata, obs), 1e-12))
 }
 
 # Rows per block of the Monte Carlo mean (mirrors MVOP_MEAN_BLOCK of R06):

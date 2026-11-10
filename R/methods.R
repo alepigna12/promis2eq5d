@@ -36,7 +36,9 @@
 #                         .fit_bundle() applies it to fold and bootstrap fits, never
 #                         to the point fit
 #   response only:  simulate(fit, newdata, M, key), mean_utility(fit, newdata, vs),
-#                   marginals(fit, newdata)
+#                   marginals(fit, newdata); optional logp(fit, newdata): log P(observed
+#                   E1-E5 profile | x) per row, floored at 1e-12, the tie-break of
+#                   variant selection (.cv_unit(); without it the tie metric is NA)
 #   direct only:    point(fit, newdata), draw(fit, newdata, M, key, draw_type, lo[, pool = NULL])  (pool: uses_oof methods only)
 
 .p2e_methods <- new.env(parent = emptyenv())
