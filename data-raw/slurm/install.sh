@@ -7,7 +7,7 @@
 #SBATCH --output=slurm_logs/p2e_install_%j.out
 #
 # Installs this checkout of promis2eq5d, and the packages the training run and its
-# tests need, into the R user library on JHPCE, then runs the per-file tests that
+# tests need, into the first library R searches (~/R/4.5 on JHPCE), then runs the per-file tests that
 # need no fitted bundles.
 #
 # Never on the login node. From the repo root, either as a batch job:
@@ -18,7 +18,8 @@
 #   srun --pty --cpus-per-task=1 --mem=4G --time=00:20:00 bash
 #   data-raw/slurm/install.sh
 #
-# R_MODULE defaults to conda_R/4.5 (as in cluster.env.example).
+# R_MODULE defaults to conda_R/4.5 (as in cluster.env.example). Packages go into
+# the first library on .libPaths() (on JHPCE ~/R/4.5), where later jobs find them.
 
 set -euo pipefail
 
@@ -38,17 +39,23 @@ module load "$R_MODULE"
 set -u
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 
-# The user library, created if missing (install.packages() would otherwise ask)
-LIB=$(Rscript -e 'cat(path.expand(Sys.getenv("R_LIBS_USER")))')
-mkdir -p "$LIB"
-# R_LIBS, unlike R_LIBS_USER, reaches the process R CMD INSTALL starts to test-load
-# the package, which must find the Imports installed below
-export R_LIBS="$LIB${R_LIBS:+:$R_LIBS}"
+# Install into the first library R itself searches, so every later R process (the
+# R CMD INSTALL test load, the training jobs) finds the packages. On JHPCE the
+# conda_R setup puts ~/R/<version> first and leaves R_LIBS_USER off the search
+# path, so R_LIBS_USER is not used.
 echo "R: $(Rscript -e 'cat(R.version.string)')"
-echo "user library: $LIB"
 echo "library paths:"
-Rscript -e 'cat(paste0("  ", .libPaths()), sep = "
-")'
+Rscript -e 'cat(paste0("  ", .libPaths()), sep = "\n")'
+LIB=$(Rscript -e 'cat(.libPaths()[1])')
+RHOME=$(Rscript -e 'cat(R.home())')
+case "$LIB" in
+  "$RHOME"*)
+    echo "error: R's first library ($LIB) is inside the R installation, not a personal" >&2
+    echo "       library; create one (e.g. mkdir -p ~/R/4.5) and check .libPaths()" >&2
+    exit 1 ;;
+esac
+[ -w "$LIB" ] || { echo "error: library $LIB is not writable" >&2; exit 1; }
+echo "installing into: $LIB"
 
 # Dependencies: Imports and Suggests from DESCRIPTION. Only missing or too-old
 # packages are installed; the module may already provide some.

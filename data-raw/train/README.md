@@ -75,7 +75,7 @@ unit ids, and `submit.sh` only reads that list and calls `sbatch`.
    `sbatch --job-name=p2e_install --partition=shared --cpus-per-task=1 --mem=4G --time=01:00:00 --output=slurm_logs/p2e_install_%j.out data-raw/slurm/install.sh`
    (1 h for the first run, which may compile dependencies; 20 min once they are installed),
    or run `data-raw/slurm/install.sh` inside an `srun --pty` session. It loads `conda_R/4.5`, installs the missing or too-old Imports and
-   Suggests into the user library (some may compile from source), installs this checkout
+   Suggests into the first library on `.libPaths()` (`~/R/4.5` on JHPCE; some may compile from source), installs this checkout
    with `R CMD INSTALL`, and runs the per-file tests that need no fitted bundles
    (training-data, design, selection). The log is `slurm_logs/p2e_install_<jobid>.out`.
 3. Check that the log ends with `done: promis2eq5d ... installed in ...`.
