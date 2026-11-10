@@ -21,6 +21,13 @@
       f$variant <- variant
       f
     },
+    # drops the diagnostics that prediction does not use (fold and bootstrap fits)
+    slim = function(fit) {
+      fit$objective_trace <- NULL
+      fit$fit_info$bfgs_codes <- NULL
+      fit$fit_info$R <- NULL
+      fit
+    },
     simulate = function(fit, newdata, M, key) mvop_simulate_profiles(fit, newdata, M, key),
     mean_utility = function(fit, newdata, vs) mvop_mean_utility(fit, newdata, vs),
     marginals = function(fit, newdata) ordinal_marginals(fit, newdata)

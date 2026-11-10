@@ -42,6 +42,12 @@
   K <- max(shipped$fold_id)
 
   train <- as.data.frame(.training_data())
+  digest <- .data_digest(train)
+  if (!identical(digest, shipped$meta$train_digest)) {
+    stop("the training data do not match the rows the shipped fits were trained on (digest ", digest,
+         ", shipped ", shipped$meta$train_digest, "); retrain needs the shipped p2e_training",
+         call. = FALSE)
+  }
   if (!is_item_set(set)) {
     if (is.null(tscore_table)) {
       stop("retrain on a T-score set needs tscore_table; use an item set (S1 or S2) or retrain = FALSE",
@@ -63,18 +69,20 @@
   saveRDS(list(vs$u, utils::packageVersion("promis2eq5d"), interval, B,
                hash(train), if (is.null(tscore_table)) NULL else hash(tscore_table)),
           tmp, version = 3)
-  digest <- unname(tools::md5sum(tmp))
+  key <- unname(tools::md5sum(tmp))
   dir <- file.path(.cache_dir(), "retrain")
-  file <- file.path(dir, paste0(m$id, "_", set, "_", vs$code, "_", digest, ".rds"))
+  file <- file.path(dir, paste0(m$id, "_", set, "_", vs$code, "_", key, ".rds"))
 
   # reading is not writing: an existing valid file is used unless cache = FALSE
   if (!isFALSE(cache) && file.exists(file)) {
     cached <- tryCatch(readRDS(file), error = function(e) NULL)
-    if (inherits(cached, "p2e_bundle")) {
+    if (inherits(cached, "p2e_bundle") && identical(cached$meta$format, BUNDLE_FORMAT)) {
       message("Using cached refit ", file)
       return(cached)
     }
-    warning("the cached file '", file, "' is not a readable promis2eq5d fit bundle; ",
+    if (inherits(cached, "p2e_bundle")) {
+      message("The cached refit ", file, " has an old format; it will be refitted")
+    } else warning("the cached file '", file, "' is not a readable promis2eq5d fit bundle; ",
             "it will be refitted", call. = FALSE)
   }
 

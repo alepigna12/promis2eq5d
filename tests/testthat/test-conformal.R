@@ -39,7 +39,7 @@ test_that("response conformal works under a value set never trained on", {
   expect_length(ci$lower, 20)
   # hand computation: residuals and fold predictions under USA, then CV+ and the cap
   mu <- .p2e_method("R06_mvop_dim")$mean_utility
-  resid <- abs(.score(b$y_profiles, usa) - rowMeans(.score(b$oof$profiles, usa)))
+  resid <- abs(.score(b$y_profiles, usa) - rowMeans(matrix(usa$u[b$oof$state], nrow(b$oof$state))))
   tp <- vapply(b$folds, function(f) mu(f, te, usa), numeric(nrow(te)))
   ref <- .cvplus_interval(tp, resid, b$fold_id, alpha = 0.1)
   expect_equal(ci$lower, pmax(ref$lower, .vs_min(usa)))
@@ -84,4 +84,21 @@ test_that("a bundle with no fold fits cannot give conformal intervals", {
   b <- stand_in_bundle("D12_klapproth", "S3K", "UK"); te <- make_synthetic_data(5, 2, countries = "UK")
   b$folds <- list()
   expect_error(.conformal(b, te, p2e_value_set("UK"), 0.9), "no fold fits.*interval = TRUE")
+})
+
+test_that("response CV+ from oof$state equals the profile route", {
+  b <- stand_in_bundle("R06_mvop_dim", "S3"); te <- make_synthetic_data(25, 8)
+  expect_null(b$oof$profiles)
+  expect_equal(dim(b$oof$state), c(400L, 50L)); expect_true(is.integer(b$oof$state))
+  # re-expand the states into n x Q x 5 profiles (the inverse of .state_index)
+  z <- b$oof$state - 1L
+  prof <- array(NA_integer_, c(dim(z), 5L))
+  for (j in 1:5) prof[, , j] <- (z %/% 5L^(5L - j)) %% 5L + 1L
+  expect_identical(.state_index(prof), b$oof$state)
+  vs <- p2e_value_set("USA")
+  resid <- abs(.score(b$y_profiles, vs) - rowMeans(.score(prof, vs)))
+  tp <- vapply(b$folds, function(f) .p2e_method("R06_mvop_dim")$mean_utility(f, te, vs), numeric(nrow(te)))
+  ref <- .cvplus_interval(tp, resid, b$fold_id, alpha = 0.2)
+  ci <- .conformal(b, te, vs, 0.8)
+  expect_equal(ci$lower, pmax(ref$lower, .vs_min(vs))); expect_equal(ci$upper, pmin(ref$upper, 1))
 })

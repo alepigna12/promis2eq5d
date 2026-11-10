@@ -172,7 +172,7 @@ p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "
 
   dir <- file.path(.cache_dir(), "fits")
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-  final <- file.path(dir, paste0(row$method, "_", row$set, "_any.rds"))
+  final <- file.path(dir, .bundle_file(row$method, row$set, NA))
   staged <- file.path(dir, paste0(".", basename(final), ".", Sys.getpid(), ".part"))
   on.exit(unlink(staged), add = TRUE)
 

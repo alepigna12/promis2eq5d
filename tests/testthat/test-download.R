@@ -6,7 +6,7 @@ test_that("download verifies the checksum and installs into the cache", {
   local_mocked_bindings(.fit_manifest = function() data.frame(method = "R09_chain", set = "S3",
     url = paste0("file://", if (startsWith(p, "/")) "" else "/", p), sha256 = h[["sha256"]], md5 = h[["md5"]], bytes = file.size(src)))
   p2e_download("R09_chain", "S3", quiet = TRUE)
-  expect_true(file.exists(file.path(.cache_dir(), "fits", "R09_chain_S3_any.rds")))
+  expect_true(file.exists(file.path(.cache_dir(), "fits", .bundle_file("R09_chain", "S3", NA))))
 })
 test_that("a bad checksum is an error and installs nothing", {
   local_mocked_bindings(.is_interactive = function() FALSE)
@@ -16,7 +16,7 @@ test_that("a bad checksum is an error and installs nothing", {
   local_mocked_bindings(.fit_manifest = function() data.frame(method = "R09_chain", set = "S3",
     url = paste0("file://", if (startsWith(p, "/")) "" else "/", p), sha256 = "0000", md5 = "0000", bytes = file.size(src)))
   expect_error(p2e_download("R09_chain", "S3", quiet = TRUE), "checksum")
-  expect_false(file.exists(file.path(.cache_dir(), "fits", "R09_chain_S3_any.rds")))
+  expect_false(file.exists(file.path(.cache_dir(), "fits", .bundle_file("R09_chain", "S3", NA))))
 })
 test_that(".load_bundle errors non-interactively and offers the download interactively", {
   local_mocked_bindings(.is_interactive = function() FALSE)
@@ -26,7 +26,7 @@ test_that(".load_bundle errors non-interactively and offers the download interac
 
 # --- Remaining cases: mocked interactivity, consent and manifest ---
 
-fake_bundle <- function() structure(list(method = "R09_chain"), class = "p2e_bundle")
+fake_bundle <- function() structure(list(method = "R09_chain", meta = list(format = 2L)), class = "p2e_bundle")
 
 # A file:// URL for an existing local file
 file_url <- function(path) {
@@ -53,7 +53,7 @@ test_that(".load_bundle asks once and calls p2e_download once when the user says
     n_calls <<- n_calls + 1L
     consented <<- .consented
     dir.create(file.path(cdir, "fits"), recursive = TRUE, showWarnings = FALSE)
-    saveRDS(fake_bundle(), file.path(cdir, "fits", "R09_chain_S3_any.rds"))
+    saveRDS(fake_bundle(), file.path(cdir, "fits", .bundle_file("R09_chain", "S3", NA)))
     invisible(character())
   })
   b <- .load_bundle("R09_chain", "S3", NA)
@@ -111,9 +111,9 @@ test_that("set = 'all' downloads every set that has a manifest row", {
   local_mocked_bindings(.fit_manifest = function() data.frame(method = "R09_chain", set = c("S3", "S1"),
     url = c(u, u), sha256 = h[["sha256"]], md5 = h[["md5"]], bytes = c(file.size(src), file.size(src))))
   p2e_download("R09_chain", "all", quiet = TRUE)
-  expect_true(file.exists(file.path(cdir, "fits", "R09_chain_S3_any.rds")))
-  expect_true(file.exists(file.path(cdir, "fits", "R09_chain_S1_any.rds")))
-  expect_false(file.exists(file.path(cdir, "fits", "R09_chain_S4_any.rds")))
+  expect_true(file.exists(file.path(cdir, "fits", .bundle_file("R09_chain", "S3", NA))))
+  expect_true(file.exists(file.path(cdir, "fits", .bundle_file("R09_chain", "S1", NA))))
+  expect_false(file.exists(file.path(cdir, "fits", .bundle_file("R09_chain", "S4", NA))))
 })
 test_that("a non-interactive download without the option errors with the command and installs nothing", {
   src <- withr::local_tempfile(fileext = ".rds"); saveRDS(list(a = 1), src)
@@ -125,7 +125,7 @@ test_that("a non-interactive download without the option errors with the command
     url = paste0("file://", if (startsWith(p, "/")) "" else "/", p), sha256 = h[["sha256"]], md5 = h[["md5"]], bytes = file.size(src)))
   expect_error(p2e_download("R09_chain", "S3", quiet = TRUE),
                "options\\(promis2eq5d.allow_download = TRUE\\)", fixed = FALSE)
-  expect_false(file.exists(file.path(cdir, "fits", "R09_chain_S3_any.rds")))
+  expect_false(file.exists(file.path(cdir, "fits", .bundle_file("R09_chain", "S3", NA))))
 })
 test_that("a repeated download replaces the installed file", {
   src <- withr::local_tempfile(fileext = ".rds"); saveRDS(list(a = 2), src)
@@ -137,7 +137,7 @@ test_that("a repeated download replaces the installed file", {
     url = paste0("file://", if (startsWith(p, "/")) "" else "/", p), sha256 = h[["sha256"]], md5 = h[["md5"]], bytes = file.size(src)))
   p2e_download("R09_chain", "S3", quiet = TRUE)
   p2e_download("R09_chain", "S3", quiet = TRUE)
-  f <- file.path(cdir, "fits", "R09_chain_S3_any.rds")
+  f <- file.path(cdir, "fits", .bundle_file("R09_chain", "S3", NA))
   expect_equal(readRDS(f), list(a = 2))
   expect_length(list.files(file.path(cdir, "fits"), all.files = TRUE, no.. = TRUE), 1L)
 })
@@ -158,7 +158,7 @@ test_that("the download timeout is raised during the transfer and restored after
   p2e_download("R09_chain", "S3", quiet = TRUE)
   expect_gte(seen, 3600)
   expect_equal(getOption("timeout"), 60)
-  expect_true(file.exists(file.path(cdir, "fits", "R09_chain_S3_any.rds")))
+  expect_true(file.exists(file.path(cdir, "fits", .bundle_file("R09_chain", "S3", NA))))
 })
 test_that("a failed download errors with context, installs nothing and leaves no partial files", {
   cdir <- withr::local_tempdir()
@@ -168,6 +168,6 @@ test_that("a failed download errors with context, installs nothing and leaves no
   missing_url <- paste0("file://", normalizePath(d, winslash = "/"), "/does-not-exist.rds")
   local_mocked_bindings(.fit_manifest = function() one_row(missing_url, "0000", "0000", 1))
   expect_error(p2e_download("R09_chain", "S3", quiet = TRUE), "download of R09_chain S3 failed")
-  expect_false(file.exists(file.path(cdir, "fits", "R09_chain_S3_any.rds")))
+  expect_false(file.exists(file.path(cdir, "fits", .bundle_file("R09_chain", "S3", NA))))
   expect_length(list.files(cdir, recursive = TRUE, all.files = TRUE, pattern = "\\.part$"), 0L)
 })

@@ -17,22 +17,40 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   }
 }
 
-.git_commit <- function() {
-  tryCatch({
-    src <- find.package("promis2eq5d")
-    out <- suppressWarnings(system2("git", c("-C", shQuote(src), "rev-parse", "HEAD"),
-                                    stdout = TRUE, stderr = FALSE))
-    if (length(out) == 1L && grepl("^[0-9a-f]{40}$", out)) out else NA_character_
-  }, error = function(e) NA_character_, warning = function(w) NA_character_)
-}
+# The bundle format this version reads and writes. Bump it when the stored
+# structure changes; .load_bundle() refuses other formats.
+BUNDLE_FORMAT <- 2L
 
-.bundle_meta <- function(method, seed) {
+# repo_commit and repo_dirty come from options set by the training driver
+# (NA when unset): the package does not look for git itself
+.bundle_meta <- function(method, seed, K, Q, B, n, train_digest) {
   pk <- unique(c(method$needs, "promis2eq5d", "eq5d"))
   ver <- vapply(pk, function(p) {
     tryCatch(as.character(utils::packageVersion(p)), error = function(e) NA_character_)
   }, character(1))
-  list(data_doi = DATA_DOI, seed = seed, repo_commit = .git_commit(), ihea_tag = IHEA_TAG,
-       r_version = R.version.string, pkg_versions = ver, created = Sys.time())
+  list(format = BUNDLE_FORMAT, data_doi = DATA_DOI, seed = seed,
+       rng_kind = c("Mersenne-Twister", "Inversion", "Rejection"),
+       K = as.integer(K), Q = as.integer(Q), B = as.integer(B), n = as.integer(n),
+       train_digest = train_digest,
+       repo_commit = getOption("promis2eq5d.repo_commit", NA_character_),
+       repo_dirty = getOption("promis2eq5d.repo_dirty", NA),
+       ihea_tag = IHEA_TAG, r_version = R.version.string, pkg_versions = ver, created = Sys.time())
+}
+
+# The md5 of the training rows a bundle was fitted on: the predictors, covariates,
+# country and outcome dimensions as a plain data frame (saveRDS, version 3)
+.data_digest <- function(train) {
+  d <- as.data.frame(train)[c(ITEMS, "P9", "AGE", "female", "country", DIMS)]
+  rownames(d) <- NULL
+  f <- tempfile(fileext = ".rds")
+  on.exit(unlink(f), add = TRUE)
+  saveRDS(d, f, version = 3)
+  unname(tools::md5sum(f))
+}
+
+# File name of a bundle: <method>_<set>_<target or "any">.rds
+.bundle_file <- function(method, set, target) {
+  paste0(method, "_", set, "_", if (is.na(target)) "any" else target, ".rds")
 }
 
 # A fit did not converge when f$converged is FALSE or f$fit_info$converged is
@@ -46,14 +64,15 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
 
 # A replicate fails when fit() errors or the fit did not converge
 # (.fit_converged). Returns list(fit, reason): the fit and NULL, or NULL and
-# the condition message ("did not converge" for a fit that ran).
+# the condition message ("did not converge" for a fit that ran, "fit() returned NULL"
+# for a fit() that returned NULL).
 .try_fit <- function(method, train, set, variant, oof = NULL) {
   err <- NULL
   f <- tryCatch(method$fit(train, set, variant, oof), error = function(e) {
     err <<- conditionMessage(e)
     NULL
   })
-  if (is.null(f)) return(list(fit = NULL, reason = err))
+  if (is.null(f)) return(list(fit = NULL, reason = if (is.null(err)) "fit() returned NULL" else err))
   if (!.fit_converged(f)) return(list(fit = NULL, reason = "did not converge"))
   list(fit = f, reason = NULL)
 }
@@ -82,11 +101,11 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   bundle$pool[idx, , drop = FALSE]
 }
 
-# Bootstrap row indices: resampled within each country (in sorted order) when
+# Bootstrap row indices: resampled within each country (in radix-sorted order, so the locale does not matter) when
 # there is a country column, else simply. Uses the caller's RNG stream.
 .boot_index <- function(country, n) {
   if (is.null(country)) return(sample.int(n, n, replace = TRUE))
-  unlist(lapply(sort(unique(country)), function(g) {
+  unlist(lapply(sort(unique(country), method = "radix"), function(g) {
     w <- which(country == g)
     w[sample.int(length(w), length(w), replace = TRUE)]
   }), use.names = FALSE)
@@ -97,7 +116,8 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
 # method, set and which fit failed
 .fit_required <- function(method, set, what, expr) {
   f <- tryCatch(expr, error = function(e) {
-    stop(method$id, " (set ", set, "): ", what, " failed: ", conditionMessage(e), call. = FALSE)
+    stop(method$id, " (set ", set, "): ", what, " failed: ", class(e)[1], ": ", conditionMessage(e),
+         call. = FALSE)
   })
   if (!.fit_converged(f)) {
     stop(method$id, " (set ", set, "): ", what, " did not converge", call. = FALSE)
@@ -122,7 +142,8 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   uses_oof <- direct && isTRUE(method$uses_oof)
   n <- nrow(train)
   if (2L * B >= 1000L) {
-    stop("B must be below 500 (the attempt seeds must stay below the fold seeds)", call. = FALSE)
+    stop("B (the number of bootstrap replicates; `boot` in retrain) must be below 500 ",
+         "(the attempt seeds must stay below the fold seeds)", call. = FALSE)
   }
 
   if (direct) {
@@ -200,9 +221,11 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
       }
       storage.mode(prof) <- "integer"
       stopifnot(identical(dim(prof), as.integer(c(n, Q, 5L))))
-      oof <- list(profiles = prof)
+      # the state index of each profile (n x Q), not the n x Q x 5 array
+      oof <- list(state = .state_index(prof))
     }
     if (uses_oof) point <- point_fit(oof_pool)
+    if (!is.null(method$slim)) folds <- lapply(folds, method$slim)
   } else if (uses_oof) {
     # the point fit computes its own residual pairs whatever B is, so a
     # retrained uses_oof method can always draw (the D03 mean is Monte Carlo
@@ -222,7 +245,7 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   b <- 0L
   while (length(boot) < B && b < 2L * B) {
     b <- b + 1L
-    say("boot ", b, "/", B)
+    say("boot attempt ", b, " (", length(boot), " of ", B, " converged)")
     r <- .with_fit_seed(seed + b, {
       idx <- .boot_index(boot_country, n)
       out <- .try_fit(method, train[idx, , drop = FALSE], set, variant,
@@ -239,6 +262,7 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
         f$boot_b <- b
         f$idx_check <- .idx_check(r$idx)
       }
+      if (!is.null(method$slim)) f <- method$slim(f)
       boot[[length(boot) + 1L]] <- f
     }
   }
@@ -257,14 +281,14 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
     boot = boot, boot_attempted = b, boot_failed = b - length(boot), boot_failures = failures,
     pool = oof_pool, boot_country = if (uses_oof) boot_country,
     oof = oof, y_profiles = y_profiles, state_freq = state_freq,
-    meta = .bundle_meta(method, seed)
+    meta = .bundle_meta(method, seed, K, Q, B, n, .data_digest(train))
   ), class = "p2e_bundle")
 }
 
 # Looks for <method>_<set>_<target or "any">.rds in fit_dir, the installed
 # fits and the cache. Downloads only after an interactive yes (R09_chain).
 .load_bundle <- function(method, set, target) {
-  file <- paste0(method, "_", set, "_", if (is.na(target)) "any" else target, ".rds")
+  file <- .bundle_file(method, set, target)
   dirs <- c(getOption("promis2eq5d.fit_dir"),
             system.file("fits", package = "promis2eq5d"),
             file.path(.cache_dir(), "fits"))
@@ -299,5 +323,17 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
   }
   b <- readRDS(p)
   if (!inherits(b, "p2e_bundle")) stop("'", p, "' is not a promis2eq5d fit bundle")
+  .check_bundle_format(b, file)
   b
 }
+# Stops unless the bundle has the format this version reads
+.check_bundle_format <- function(b, file) {
+  if (!identical(b$meta$format, BUNDLE_FORMAT)) {
+    fmt <- if (is.null(b$meta$format)) "none" else format(b$meta$format)
+    stop("fit bundle '", file, "' has format ", fmt, "; this version of promis2eq5d needs format ",
+         BUNDLE_FORMAT, ": reinstall promis2eq5d, run p2e_download() again, or delete the cached refit",
+         call. = FALSE)
+  }
+  invisible(b)
+}
+

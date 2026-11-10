@@ -198,8 +198,11 @@ oof_predictions <- function(fit_fun, train, spec, predict_fun) {
   out <- rep(NA_real_, nrow(train))
   for (k in sort(unique(train$fold))) {
     te <- train$fold == k
-    f <- fit_fun(train[!te, , drop = FALSE], spec)
-    if (!isTRUE(f$fit_info$converged)) stop("D03 did not converge")
+    f <- tryCatch(fit_fun(train[!te, , drop = FALSE], spec), error = function(e) {
+      stop("oof_predictions: the fit for fold ", k, " failed: ", class(e)[1], ": ", conditionMessage(e),
+           call. = FALSE)
+    })
+    if (!isTRUE(f$fit_info$converged)) stop("D03 did not converge (fold ", k, ")")
     p <- predict_fun(f, train[te, , drop = FALSE])
     if (!is.numeric(p) || length(p) != sum(te) || anyNA(p)) {
       stop("oof_predictions: predict_fun must return ", sum(te), " numeric values without NA for fold ", k)

@@ -48,3 +48,12 @@ test_that("a saved R06 bundle does not drag the training data along", {
   f <- tempfile(fileext = ".rds"); saveRDS(b, f); on.exit(unlink(f))
   expect_lt(file.size(f), 5e6)
 })
+test_that("slim R06 fits predict exactly as the full fits", {
+  m <- .p2e_method("R06_mvop_dim"); tr <- make_synthetic_data(300, 1); nd <- tr[1:5, ]
+  f <- m$fit(tr, "S3", .p2e_method_variants(m, "S3")[[1]]); s <- m$slim(f)
+  expect_false(is.null(f$objective_trace)); expect_false(is.null(f$fit_info$R))
+  expect_null(s$objective_trace); expect_null(s$fit_info$R); expect_null(s$fit_info$bfgs_codes)
+  expect_identical(m$mean_utility(s, nd, p2e_value_set("UK")), m$mean_utility(f, nd, p2e_value_set("UK")))
+  expect_identical(withr::with_seed(1, m$simulate(s, nd, 4, 1:5)), withr::with_seed(1, m$simulate(f, nd, 4, 1:5)))
+  expect_identical(m$marginals(s, nd), m$marginals(f, nd))
+})

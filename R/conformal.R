@@ -64,7 +64,7 @@ CONFORMAL_BLOCK <- 500L
   }
 
   y <- .score(bundle$y_profiles, vs)
-  oof_hat <- if (direct) map_direct(bundle$oof$mu) else rowMeans(.score(bundle$oof$profiles, vs))
+  oof_hat <- if (direct) map_direct(bundle$oof$mu) else rowMeans(matrix(vs$u[bundle$oof$state], nrow(bundle$oof$state)))
   resid <- abs(y - oof_hat)
 
   n <- nrow(newdata)

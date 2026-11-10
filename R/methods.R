@@ -32,6 +32,9 @@
 #   fit(train, set, variant, oof = NULL)    the fit list (+ $set, $variant);
 #                         may set $converged = FALSE. Direct methods find the
 #                         outcome in train$y; train has a `fold` column.
+#   slim(fit)             optional: the fit without what prediction does not need;
+#                         .fit_bundle() applies it to fold and bootstrap fits, never
+#                         to the point fit
 #   response only:  simulate(fit, newdata, M, key), mean_utility(fit, newdata, vs),
 #                   marginals(fit, newdata)
 #   direct only:    point(fit, newdata), draw(fit, newdata, M, key, draw_type, lo[, pool = NULL])  (pool: uses_oof methods only)

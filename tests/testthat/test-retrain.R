@@ -98,7 +98,7 @@ test_that("fit_bundle: vs, fold_id and fit_folds", {
   expect_error(.fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 2, 1, fold_id = 1:5), "fold_id")
   msgs <- testthat::capture_messages(
     .fit_bundle(toy_method(), train, "S4", "UK", list(), 3, 1, 1, progress = TRUE))
-  expect_equal(msgs, c("point fit\n", "fold 1/3\n", "fold 2/3\n", "fold 3/3\n", "boot 1/1\n"))
+  expect_equal(msgs, c("point fit\n", "fold 1/3\n", "fold 2/3\n", "fold 3/3\n", "boot attempt 1 (0 of 1 converged)\n"))
 })
 
 test_that("a T-score set retrains with a made-up table", {
@@ -196,7 +196,7 @@ test_that("the cache key covers the training data and the T-score table", {
   suppressMessages(.retrain_bundle("D12_klapproth", "S3K", vs, tscore_table = tb, cache = TRUE))
   msgs <- testthat::capture_messages(.retrain_bundle("D12_klapproth", "S3K", vs, tscore_table = tb))
   expect_true(any(grepl("Using cached refit", msgs)))
-  d2 <- d; d2$AGE[1] <- d2$AGE[1] + 1L
+  d2 <- d; d2$WEIGHT[1] <- d2$WEIGHT[1] + 1  # outside the digest columns, inside the key
   withr::local_options(promis2eq5d.training_data = d2)
   msgs <- testthat::capture_messages(.retrain_bundle("D12_klapproth", "S3K", vs, tscore_table = tb))
   expect_false(any(grepl("Using cached refit", msgs)))
@@ -204,4 +204,26 @@ test_that("the cache key covers the training data and the T-score table", {
   tb2 <- tb; tb2$tscore[1] <- tb2$tscore[1] + 1
   msgs <- testthat::capture_messages(.retrain_bundle("D12_klapproth", "S3K", vs, tscore_table = tb2))
   expect_false(any(grepl("Using cached refit", msgs)))
+})
+
+test_that("retrain refuses training data that differ from the shipped rows", {
+  withr::local_options(promis2eq5d.training_data = make_synthetic_data(400, seed = 2, countries = c("DE", "UK")),
+                       promis2eq5d.cache_dir = withr::local_tempdir())
+  stand_in_bundle("D03_clad", "S1", "UK")
+  expect_error(.retrain_bundle("D03", "S1", p2e_value_set("USA"), mode = "mean", cache = FALSE),
+               "training data do not match the rows the shipped fits were trained on.*digest.*p2e_training")
+})
+
+test_that("an old-format cached refit is refitted with a message", {
+  cdir <- withr::local_tempdir()
+  withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
+  stand_in_bundle("D03_clad", "S1", "UK")
+  vs <- p2e_value_set("USA")
+  suppressMessages(.retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE))
+  path <- list.files(file.path(cdir, "retrain"), full.names = TRUE)
+  old <- readRDS(path); old$meta$format <- NULL; saveRDS(old, path)
+  msgs <- testthat::capture_messages(r <- .retrain_bundle("D03", "S1", vs, boot = 1, mode = "individual", cache = TRUE))
+  expect_true(any(grepl("old format", msgs))); expect_true(any(grepl("point fit", msgs)))
+  expect_false(any(grepl("Using cached refit", msgs)))
+  expect_identical(r$meta$format, 2L); expect_identical(readRDS(path)$meta$format, 2L)
 })
