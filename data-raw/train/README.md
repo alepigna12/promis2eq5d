@@ -71,13 +71,13 @@ unit ids, and `submit.sh` only reads that list and calls `sbatch`.
 1. Clone over SSH and switch to the branch:
    `git clone git@github.com:alepigna12/promis2eq5d.git ~/research/promis2eq5d`, then
    `cd ~/research/promis2eq5d && git checkout pkg-train`.
-2. Install in an interactive session, not on the login node: `srun --pty bash`, then
-   `module load conda_R/4.5`, then `R CMD INSTALL --no-multiarch .` into the user library,
-   after installing the package's Suggests there too (`install.packages()` on the list in
-   `DESCRIPTION`; some may compile from source).
-3. In the same session, run the per-file tests that need no fits (for example
-   `Rscript -e 'testthat::test_file("tests/testthat/test-selection.R")'`, and likewise for
-   the other files that need no fitted bundles).
+2. Install, never on the login node: from the repo root, `mkdir -p slurm_logs`, then
+   `sbatch data-raw/slurm/install.sh` (or run `data-raw/slurm/install.sh` inside
+   `srun --pty bash`). It loads `conda_R/4.5`, installs the missing or too-old Imports and
+   Suggests into the user library (some may compile from source), installs this checkout
+   with `R CMD INSTALL`, and runs the per-file tests that need no fitted bundles
+   (training-data, design, selection). The log is `slurm_logs/p2e_install_<jobid>.out`.
+3. Check that the log ends with `done: promis2eq5d ... installed in ...`.
 4. Copy the licensed T-score table into your own account, outside the repo, and lock it:
    `chmod go-rwx <file>`. Never commit it.
 5. `cp data-raw/slurm/cluster.env.example data-raw/slurm/cluster.env` (gitignored) and set
