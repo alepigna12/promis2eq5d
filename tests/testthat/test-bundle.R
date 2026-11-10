@@ -177,3 +177,10 @@ test_that("fit_bundle validates the folds and the bootstrap strata", {
   expect_error(fit(na_country), "country.*missing")
   expect_error(fit(na_country, fold_id = rep(1:3, length.out = 120)), "country.*missing")
 })
+
+test_that("fit_bundle requires a country column even with util_band", {
+  tr <- make_synthetic_data(120, 1)
+  nc <- tr[setdiff(names(tr), "country")]
+  expect_error(.fit_bundle(toy_method(), nc, "S4", "UK", list(), 3, 2, 1,
+                           fold_id = rep(1:3, length.out = 120)), "country column")
+})

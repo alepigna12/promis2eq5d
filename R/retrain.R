@@ -53,7 +53,16 @@
 
   tmp <- tempfile(fileext = ".rds")
   on.exit(unlink(tmp), add = TRUE)
-  saveRDS(list(vs$u, utils::packageVersion("promis2eq5d"), interval, B), tmp, version = 3)
+  # the key covers the value set, package version, interval, B, the training data
+  # actually fitted (after T-scoring) and the T-score table
+  hash <- function(x) {
+    f <- tempfile(fileext = ".rds"); on.exit(unlink(f), add = TRUE)
+    saveRDS(x, f, version = 3)
+    unname(tools::md5sum(f))
+  }
+  saveRDS(list(vs$u, utils::packageVersion("promis2eq5d"), interval, B,
+               hash(train), if (is.null(tscore_table)) NULL else hash(tscore_table)),
+          tmp, version = 3)
   digest <- unname(tools::md5sum(tmp))
   dir <- file.path(.cache_dir(), "retrain")
   file <- file.path(dir, paste0(m$id, "_", set, "_", vs$code, "_", digest, ".rds"))

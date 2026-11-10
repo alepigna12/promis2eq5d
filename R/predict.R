@@ -195,7 +195,16 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
   key <- if (!is.null(id) && within_id == "common") match(data[[id]], unique(data[[id]])) else seq_len(n)
 
   std <- .standardise_input(data, tscore_table)
-  set <- .choose_set(m$id, std, set)
+  set <- tryCatch(.choose_set(m$id, std, set), error = function(e) {
+    # incomplete items and no T-scores: say why the table did not help
+    miss <- setdiff(ITEMS, names(std))
+    if (!is.null(tscore_table) && length(miss) && !all(TSCORES %in% names(std))) {
+      stop("a T-score table was given, but the data have neither all 28 items nor all T-score ",
+           "columns; missing item column(s): ",
+           paste(vapply(miss, .user_name, character(1)), collapse = ", "), ".", call. = FALSE)
+    }
+    stop(e)
+  })
   message("Using predictor set ", set, " (", SET_DESCRIPTIONS[[set]], ")")
 
   if (!direct && retrain) message("retrain has no effect for response methods")

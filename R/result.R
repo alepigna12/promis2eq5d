@@ -62,7 +62,7 @@ print.p2e_result <- function(x, n = 6, ...) {
   cat("route: ", .result_route(info), "\n", sep = "")
   cat("mode: ", info$mode, "\n", sep = "")
   cat("draws: ", if (is.na(info$draws)) "none (mean mode)" else info$draws, "\n", sep = "")
-  if (info$mode != "mean" && !is.na(info$boot_attempted)) {
+  if (info$mode != "mean" && isTRUE(!is.na(info$boot_attempted))) {
     cat("bootstrap fits: ", info$boot_attempted - info$boot_failed, " of ", info$boot_attempted,
         " converged\n", sep = "")
   }

@@ -114,3 +114,11 @@ test_that("draw modes report the bootstrap counts in print and summary", {
   expect_false(any(grepl("bootstrap fits", capture.output(print(rm)))))
   expect_null(attr(summary(rm), "boot_attempted"))
 })
+
+test_that("print works on a result without bootstrap counts", {
+  r <- quiet(predict_eq5d(res_data(), "UK", mode = "individual", draws = 4, seed = 1))
+  i <- attr(r, "p2e_info"); i$boot_attempted <- NULL; i$boot_failed <- NULL
+  attr(r, "p2e_info") <- i
+  out <- capture.output(print(r))
+  expect_false(any(grepl("bootstrap fits", out)))
+})

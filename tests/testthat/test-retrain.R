@@ -182,3 +182,25 @@ test_that("T-score-only user data retrain a T-score set with a made-up table", {
                                              retrain = TRUE, tscore_table = tb)),
                "neither all 28 items nor all T-score")
 })
+
+test_that("the cache key covers the training data and the T-score table", {
+  cdir <- withr::local_tempdir()
+  d <- retrain_data()
+  withr::local_options(promis2eq5d.training_data = d, promis2eq5d.cache_dir = cdir)
+  stand_in_bundle("D12_klapproth", "S3K", "UK")
+  doms <- c("PF", "ANX", "DEP", "FAT", "SLP", "SR", "PI")
+  tb <- do.call(rbind, lapply(seq_along(doms), function(i)
+    data.frame(domain = doms[i], raw = 0:40, tscore = 10 * i + (0:40) / 2)))
+  vs <- p2e_value_set("USA")
+  suppressMessages(.retrain_bundle("D12_klapproth", "S3K", vs, tscore_table = tb, cache = TRUE))
+  msgs <- testthat::capture_messages(.retrain_bundle("D12_klapproth", "S3K", vs, tscore_table = tb))
+  expect_true(any(grepl("Using cached refit", msgs)))
+  d2 <- d; d2$AGE[1] <- d2$AGE[1] + 1L
+  withr::local_options(promis2eq5d.training_data = d2)
+  msgs <- testthat::capture_messages(.retrain_bundle("D12_klapproth", "S3K", vs, tscore_table = tb))
+  expect_false(any(grepl("Using cached refit", msgs)))
+  withr::local_options(promis2eq5d.training_data = d)
+  tb2 <- tb; tb2$tscore[1] <- tb2$tscore[1] + 1
+  msgs <- testthat::capture_messages(.retrain_bundle("D12_klapproth", "S3K", vs, tscore_table = tb2))
+  expect_false(any(grepl("Using cached refit", msgs)))
+})

@@ -115,7 +115,10 @@ IHEA_TAG <- "freeze-ihea2027-abstract-v3"
     }
   }
   train[["fold"]] <- fold_id
-  if (!is.null(train[["country"]]) && anyNA(train[["country"]])) {
+  if (is.null(train[["country"]])) {
+    stop("train needs a country column (the bootstrap is stratified by country)", call. = FALSE)
+  }
+  if (anyNA(train[["country"]])) {
     stop("train$country has missing values; the bootstrap is stratified by country", call. = FALSE)
   }
 

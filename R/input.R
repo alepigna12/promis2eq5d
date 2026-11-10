@@ -154,11 +154,6 @@ p2e_columns <- function() {
   # incomplete items, T_* columns already in the data are used as given (the
   # table is then used only to score the training data when retraining).
   miss <- setdiff(ITEMS, names(std))
-  if (!is.null(tscore_table) && length(miss) && !all(TSCORES %in% names(std))) {
-    stop("a T-score table was given, but the data have neither all 28 items nor all T-score ",
-         "columns; missing item column(s): ",
-         paste(vapply(miss, .user_name, character(1)), collapse = ", "), ".", call. = FALSE)
-  }
   if (!is.null(tscore_table) && !length(miss)) {
     ts <- .tscores_internal(std, tscore_table)
     replaced <- intersect(TSCORES, names(std))
