@@ -288,11 +288,16 @@ obj_md5 <- function(x) {
   saveRDS(x, f, version = 3)
   unname(tools::md5sum(f))
 }
-# The fields of a piece record that must match this run; returns the mismatches
-provenance_mismatch <- function(rec, what, variant_id) {
-  now <- list(smoke = SMOKE, commit = opt$commit, dirty = opt$dirty, variant_id = variant_id)
+# A record field for a message ("<missing>" when the record has no such field)
+fmt_field <- function(x) if (is.null(x)) "<missing>" else paste(format(x), collapse = " ")
+# The fields of a piece record that must match `now` (default: this run's smoke,
+# commit, dirty and the variant); returns the mismatches as readable lines
+provenance_mismatch <- function(rec, what, variant_id,
+                                now = list(smoke = SMOKE, commit = opt$commit, dirty = opt$dirty,
+                                           variant_id = variant_id)) {
   bad <- names(now)[!vapply(names(now), function(k) identical(rec[[k]], now[[k]]), NA)]
-  vapply(bad, function(k) sprintf("%s: %s = %s (this run: %s)", what, k, format(rec[[k]]), format(now[[k]])), "")
+  vapply(bad, function(k) sprintf("%s: %s = %s (expected: %s)", what, k, fmt_field(rec[[k]]),
+                                  fmt_field(now[[k]])), "", USE.NAMES = FALSE)
 }
 read_core <- function(file, id) {
   p <- core_file(file)
@@ -354,7 +359,8 @@ stage_boot <- function() {
                                             u$b1:u$b2, fold_id, vs = vs, pool = pool))
     write_rds_atomic(list(attempts = r$value, unit = id, b1 = u$b1, b2 = u$b2, seconds = r$seconds,
                           warnings = r$warnings, smoke = SMOKE, commit = opt$commit, dirty = opt$dirty,
-                          variant_id = cl$variant_id, pool_md5 = if (!is.null(pool)) obj_md5(pool)),
+                          variant_id = cl$variant_id, pool_md5 = if (!is.null(pool)) obj_md5(pool),
+                          train_digest = promis2eq5d:::.data_digest(train), fold_md5 = obj_md5(fold_id)),
                      boot_file(cl$file, u$b1, u$b2))
     ok <- sum(!vapply(r$value, function(a) is.null(a$fit), NA))
     cat(sprintf("%s variant=%d converged=%d of %d %.1fs warnings=%d\n", id, cl$variant_id, ok,
@@ -376,16 +382,18 @@ stage_merge <- function() {
     bf <- list.files(file.path(opt$out, "boot"), full.names = TRUE,
                      pattern = paste0("^", gsub(".", "\\.", stem, fixed = TRUE), "_[0-9]+-[0-9]+\\.rds$"))
     bt <- lapply(bf, readRDS)
-    bad <- provenance_mismatch(cr, "core", cl$variant_id)
+    bad <- c(provenance_mismatch(cr, "core", cl$variant_id),
+             provenance_mismatch(cr, "core", now = list(B = cl$B, K = K_FOLDS, Q = Q_DRAWS)))
+    # every chunk was fitted on the core's training data and folds (R06 chunks
+    # do not read the core, so this is their only link to it)
+    data_now <- list(train_digest = cr$core$train_digest, fold_md5 = obj_md5(cr$core$fold_id))
     for (j in seq_along(bt)) {
-      bad <- c(bad, provenance_mismatch(bt[[j]], basename(bf[j]), cl$variant_id))
+      bad <- c(bad, provenance_mismatch(bt[[j]], basename(bf[j]), cl$variant_id),
+               provenance_mismatch(bt[[j]], basename(bf[j]), now = data_now))
       if (!identical(basename(bf[j]), basename(boot_file(cl$file, bt[[j]]$b1, bt[[j]]$b2)))) {
-        bad <- c(bad, paste0(basename(bf[j]), ": holds attempts ", bt[[j]]$b1, "-", bt[[j]]$b2))
+        bad <- c(bad, paste0(basename(bf[j]), ": holds attempts ", fmt_field(bt[[j]]$b1), "-",
+                             fmt_field(bt[[j]]$b2)))
       }
-    }
-    if (!identical(cr$B, cl$B) || !identical(cr$K, K_FOLDS) || !identical(cr$Q, Q_DRAWS)) {
-      bad <- c(bad, sprintf("core: B, K, Q = %d, %d, %d (this run: %d, %d, %d)", cr$B, cr$K, cr$Q,
-                            cl$B, K_FOLDS, Q_DRAWS))
     }
     if (isTRUE(cl$m$uses_oof)) {
       pm <- obj_md5(cr$core$pool)
@@ -393,14 +401,14 @@ stage_merge <- function() {
         if (!identical(bt[[j]]$pool_md5, pm)) bad <- c(bad, paste0(basename(bf[j]), ": made with another core's pool"))
       }
     }
-    bs <- unlist(lapply(bt, function(x) x$b1:x$b2))
+    bs <- unlist(lapply(bt, function(x) if (length(x$b1) == 1L && length(x$b2) == 1L) x$b1:x$b2))
     dup <- unique(bs[duplicated(bs)])
     miss <- setdiff(seq_len(cl$B), bs)
     out <- setdiff(bs, seq_len(cl$B))
     if (length(dup)) bad <- c(bad, paste("attempts in more than one boot file:", paste(sort(dup), collapse = ", ")))
     if (length(miss)) bad <- c(bad, paste("attempts in no boot file:", paste(miss, collapse = ", ")))
     if (length(out)) bad <- c(bad, paste("attempts beyond B:", paste(sort(out), collapse = ", ")))
-    if (length(bad)) stop(id, ": the pieces do not match this run or do not cover 1..", cl$B, ":\n  ",
+    if (length(bad)) stop(id, ": the pieces do not match this run or the core, or do not cover 1..", cl$B, ":\n  ",
                           paste(bad, collapse = "\n  "), call. = FALSE)
     bt <- bt[order(vapply(bt, function(x) x$b1, 1L))]
     list(id = id, u = u, cl = cl, core = cr, boot = bt)

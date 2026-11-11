@@ -146,7 +146,7 @@ BUNDLE_FORMAT <- 2L
                        vs = vs, fold_id = fold_id, fit_folds = fit_folds)
   attempts <- .boot_attempts(method, train, set, target, variant, seed, seq_len(B), core$fold_id,
                              vs = core$vs, pool = core$pool, progress = progress, B = B)
-  .bundle_assemble(method, train, set, target, variant, core, attempts, B, seed, progress = progress)
+  .bundle_assemble(method, train, set, core$target, variant, core, attempts, B, seed, progress = progress)
 }
 
 # The value set of a direct method (vs, else p2e_value_set(target)); NULL for a
@@ -315,7 +315,8 @@ BUNDLE_FORMAT <- 2L
   if (length(fold_id) != n || anyNA(fold_id)) {
     stop("fold_id must have length nrow(train) and no missing values", call. = FALSE)
   }
-  if (uses_oof && (!is.data.frame(pool) || nrow(pool) != n)) {
+  # (no attempts, no pool needed: a uses_oof core without folds and with B = 0 may have an empty pool)
+  if (uses_oof && length(b) && (!is.data.frame(pool) || nrow(pool) != n)) {
     stop(method$id, " uses out-of-fold residuals: its bootstrap attempts need the core's pool ",
          "(a data frame with one row per training row)", call. = FALSE)
   }
@@ -353,8 +354,9 @@ BUNDLE_FORMAT <- 2L
 # each b exactly once, any order): takes the converged fits in b order, makes
 # the replacement attempts B + 1, ... while fewer than B converged and fewer
 # than 2B were made, then warns (fewer than B converged) or stops (none) as
-# .fit_bundle() and returns the p2e_bundle. method, set, target, B and seed
-# and the training data must be the core's. meta is made now (repo_commit and
+# .fit_bundle() and returns the p2e_bundle. method, set, target (the core's
+# $target: vs$code for a direct method, NA for a response method), variant, B
+# and seed and the training data must be the core's. meta is made now (repo_commit and
 # repo_dirty from the options, created = now).
 .bundle_assemble <- function(method, train, set, target, variant, core, attempts, B, seed,
                              progress = FALSE) {
@@ -363,6 +365,10 @@ BUNDLE_FORMAT <- 2L
     stop("the core is for ", core$method, " (set ", core$set, "), not ", method$id, " (set ", set, ")",
          call. = FALSE)
   }
+  same_target <- if (is.na(core$target)) length(target) == 1L && is.na(target) else
+    identical(as.character(target), core$target)
+  if (!same_target) stop("the core is for target ", core$target, ", not ", target, call. = FALSE)
+  if (!identical(core$variant, variant)) stop("the core was fitted with another variant", call. = FALSE)
   if (!isTRUE(all.equal(core$B, B)) || !isTRUE(all.equal(core$seed, seed))) {
     stop("the core was made with B = ", core$B, " and seed = ", core$seed, ", not B = ", B,
          " and seed = ", seed, call. = FALSE)
@@ -370,7 +376,7 @@ BUNDLE_FORMAT <- 2L
   if (!identical(core$n, nrow(train)) || !identical(core$train_digest, .data_digest(train))) {
     stop("the training data differ from those the core was fitted on", call. = FALSE)
   }
-  bs <-vapply(attempts, function(a) as.integer(a$b), integer(1))
+  bs <- vapply(attempts, function(a) as.integer(a$b), integer(1))
   dup <- unique(bs[duplicated(bs)])
   if (length(dup)) stop("bootstrap attempt(s) duplicated: ", paste(sort(dup), collapse = ", "), call. = FALSE)
   out <- setdiff(bs, seq_len(B))

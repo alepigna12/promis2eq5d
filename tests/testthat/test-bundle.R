@@ -404,6 +404,12 @@ test_that("assembly needs every attempt 1..B exactly once and the core's setting
   expect_error(asm(att(1:3), B = 4), "B")
   expect_error(asm(att(1:3), seed = 2), "seed")
   expect_error(asm(att(1:3), tr = make_synthetic_data(200, 2)), "training data")
+  expect_error(.bundle_assemble(toy_method(), train, "S4", "DE", list(), core, att(1:3), 3, 1), "target UK, not DE")
+  expect_error(.bundle_assemble(toy_method(), train, "S4", "UK", list(a = 1), core, att(1:3), 3, 1), "variant")
+  rcore <- .bundle_core(toy_resp_probe(), train, "S4", NA, list(), 3, 1, 1, Q = 3)
+  ratt <- .boot_attempts(toy_resp_probe(), train, "S4", NA, list(), 1, 1L, rcore$fold_id)
+  expect_s3_class(.bundle_assemble(toy_resp_probe(), train, "S4", NA, list(), rcore, ratt, 1, 1), "p2e_bundle")
+  expect_error(.bundle_assemble(toy_resp_probe(), train, "S4", "UK", list(), rcore, ratt, 1, 1), "target NA")
   core0 <- .bundle_core(toy_method(), train, "S4", "UK", list(), 3, 0, 1)
   b0 <- .bundle_assemble(toy_method(), train, "S4", "UK", list(), core0, list(), 0, 1)
   expect_length(b0$boot, 0); expect_identical(b0$boot_attempted, 0L)
@@ -422,6 +428,10 @@ test_that(".boot_attempts: a uses_oof method needs the pool; attempts are valida
   expect_identical(.boot_attempts(toy_method(), train, "S4", "UK", list(), 1, integer(), fid), list())
   r <- .boot_attempts(toy_method(), train, "S4", "UK", list(), 1, 2L, fid)
   expect_named(r[[1]], c("b", "fit", "reason")); expect_null(r[[1]]$reason)
+  # no attempts need no pool: a uses_oof bundle without folds and B = 0 (an empty pool) still fits
+  expect_identical(.boot_attempts(toy_method(uses_oof = TRUE), train, "S4", "UK", list(), 1, integer(), fid), list())
+  b0 <- .fit_bundle(toy_method(uses_oof = TRUE), train, "S4", "UK", list(), 3, 0, 1, fit_folds = FALSE)
+  expect_s3_class(b0, "p2e_bundle"); expect_equal(nrow(b0$pool), 0L); expect_length(b0$boot, 0)
 })
 
 test_that("the core holds no training data frame and no T-score column", {
@@ -430,6 +440,14 @@ test_that("the core holds no training data frame and no T-score column", {
   for (uo in c(FALSE, TRUE)) {
     core <- .bundle_core(toy_method(uses_oof = uo), train, "S4", "UK", list(), 3, 2, 1)
     expect_false(any(vapply(core, is.data.frame, NA) & names(core) != "pool"))
+    # nor one level down (the toy's point fit keeps the pool it was given: that is the pool)
+    nested <- unlist(lapply(setdiff(names(core), "pool"), function(k) {
+      e <- core[[k]]
+      if (!is.list(e) || is.data.frame(e)) return(character())
+      hit <- vapply(e, function(x) is.data.frame(x) && !identical(x, core$pool), NA)
+      if (any(hit)) paste(k, which(hit)) else character()
+    }))
+    expect_identical(nested, character())
     expect_false("train" %in% names(core))
     if (uo) expect_named(core$pool, c("oof_mu", "oof_resid"))
     expect_false(any(grepl("T_PF|T_ANX", names(unlist(core)))))

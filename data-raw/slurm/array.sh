@@ -2,9 +2,10 @@
 # One SLURM array job of the training driver: array index i runs the unit id on
 # line i of the submit list (one unit per task: cv, bundle, core, boot, merge),
 # or, for select and collect, the stage itself (no ids). Adapted from the
-# iHEA_2027 script slurm/array.sh at tag freeze-ihea2027-abstract-v3. Submitted by data-raw/slurm/submit.sh, which passes
-# STAGE, SUBMIT_LIST, PROJECT_DIR, OUT, TSCORE_TABLE and SMOKE (and the variables
-# of cluster.env) through --export=ALL.
+# iHEA_2027 script slurm/array.sh at tag freeze-ihea2027-abstract-v3.
+# Submitted by data-raw/slurm/submit.sh, which passes STAGE, SUBMIT_LIST,
+# PROJECT_DIR, OUT, TSCORE_TABLE and SMOKE (and the variables of cluster.env)
+# through --export=ALL.
 #SBATCH --cpus-per-task=1
 #SBATCH --output=slurm_logs/%x_%A_%a.out
 

@@ -104,11 +104,12 @@ unit ids, and `submit.sh` only reads that list and calls `sbatch`.
    `TIME_CORE`/`MEM_CORE`, `TIME_BOOT`/`MEM_BOOT`, `TIME_MERGE`/`MEM_MERGE` and the chunk sizes
    `BOOT_CHUNK_R06`, `BOOT_CHUNK_D03` (empty = 20 and 25) are placeholders: set `TIME_BOOT` and
    the chunk sizes from the measured core times.
-   `TIME_*` are 3 x the projected time of the stage's slowest unit (R06 bundles set
-   `TIME_BUNDLE`); `MEM_*` were not measured, so check `sacct` MaxRSS after the cv stage.
+   `TIME_*` are 3 x the projected time of the stage's slowest unit; `MEM_*` were not
+   measured, so check `sacct` MaxRSS after the cv stage.
 
-   `TIME_BUNDLE` is 48 h because the R06 projection ignores Q; check the shared partition's
-   maximum with `sinfo -o "%P %l"` and lower it if needed. `PROJECT_DIR`, `OUT` and
+   `TIME_BUNDLE` is 3 h: `bundle` now runs only R09 and D12 (an R09 bundle is about 6 x an R09
+   cv unit, under 1 h; D12 minutes). Check the shared partition's maximum walltime with
+   `sinfo -o "%P %l"` before setting a long `TIME_CORE` or `TIME_BOOT`. `PROJECT_DIR`, `OUT` and
    `TSCORE_TABLE` must not contain commas or spaces (`sbatch --export` is comma-delimited).
 
 **Run order.** No R runs on the login node. `list.sh` (cv, bundle, core, boot, merge) runs inside an
