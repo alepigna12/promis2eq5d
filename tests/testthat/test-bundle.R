@@ -292,3 +292,146 @@ test_that("fit_bundle requires a country column even with util_band", {
   expect_error(.fit_bundle(toy_method(), nc, "S4", "UK", list(), 3, 2, 1,
                            fold_id = rep(1:3, length.out = 120)), "country column")
 })
+
+# ---- chunked bootstrap: core + attempts in chunks + assemble == .fit_bundle() ----
+# meta$created is the only field that depends on when a bundle is assembled
+no_created <- function(b) { b$meta$created <- NULL; b }
+# a response toy whose replicates depend on their sample and seed
+toy_resp_probe <- function() {
+  m <- toy_resp_method()
+  m$fit <- function(train, set, variant, oof = NULL) {
+    stopifnot(is.null(train$y))
+    list(set = set, ids = train$ID, folds_seen = train$fold, probe = stats::runif(1))
+  }
+  m
+}
+# fails replicate b of a bundle (seed, train) whatever the order or task it is fitted in
+fail_sample <- function(m, train, seed, b) {
+  bad <- train$ID[.with_fit_seed(seed + b, .boot_index(as.character(train$country), nrow(train)))]
+  f <- m$fit
+  m$fit <- function(train, ...) { if (identical(train$ID, bad)) stop("toy fit failed on purpose"); f(train, ...) }
+  m
+}
+
+test_that("core + attempts in scrambled chunks + assemble is identical to .fit_bundle()", {
+  withr::local_options(promis2eq5d.repo_commit = "abc", promis2eq5d.repo_dirty = FALSE)
+  train <- make_synthetic_data(200, 1)
+  fid <- make_cv_folds(train, v = 3, seed = 9)$fold
+  B <- 7L
+  cfgs <- list(
+    direct = list(m = toy_method, target = "UK", fold_id = fid, Q = 50),
+    response = list(m = toy_resp_probe, target = NA, fold_id = fid, Q = 4),
+    uses_oof = list(m = function() toy_method(uses_oof = TRUE), target = "UK", fold_id = NULL, Q = 50))
+  for (nm in names(cfgs)) {
+    cf <- cfgs[[nm]]
+    ref <- .fit_bundle(cf$m(), train, "S4", cf$target, list(), K = 3, B = B, seed = 7, Q = cf$Q,
+                       fold_id = cf$fold_id)
+    uses_oof <- nm == "uses_oof"
+    chunk <- function(b, core = NULL) {
+      .boot_attempts(cf$m(), train, "S4", cf$target, list(), seed = 7, b = b,
+                     fold_id = if (is.null(core)) cf$fold_id else core$fold_id,
+                     vs = core$vs, pool = core$pool)
+    }
+    # attempts that need no pool can be made before the core
+    c3 <- if (!uses_oof) chunk(c(7L, 6L))
+    core <- .bundle_core(cf$m(), train, "S4", cf$target, list(), K = 3, B = B, seed = 7, Q = cf$Q,
+                         fold_id = cf$fold_id)
+    expect_s3_class(core, "p2e_bundle_core")
+    if (uses_oof) c3 <- chunk(c(7L, 6L), core)
+    c1 <- chunk(1:3, core); c2 <- chunk(c(5L, 4L), core)
+    expect_length(c2, 2L); expect_identical(c2[[1]]$b, 5L)
+    got <- .bundle_assemble(cf$m(), train, "S4", cf$target, list(), core, c(c3, c1, c2), B = B, seed = 7)
+    expect_identical(no_created(got), no_created(ref), label = nm)
+    expect_s3_class(got$meta$created, "POSIXct")
+  }
+})
+
+test_that("a failed attempt in a chunk is replaced at assembly exactly as in one task", {
+  train <- make_synthetic_data(200, 1)
+  ref <- .fit_bundle(toy_method(fail_on = 2), train, "S4", "UK", list(), 3, 4, 1)
+  # one toy_method(fail_on = 2) through core, chunks and assembly (it counts its calls)
+  m <- toy_method(fail_on = 2)
+  core <- .bundle_core(m, train, "S4", "UK", list(), 3, 4, 1)
+  a12 <- .boot_attempts(m, train, "S4", "UK", list(), 1, 1:2, core$fold_id, core$vs)
+  a3 <- .boot_attempts(m, train, "S4", "UK", list(), 1, 3L, core$fold_id, core$vs)
+  a4 <- .boot_attempts(m, train, "S4", "UK", list(), 1, 4L, core$fold_id, core$vs)
+  expect_null(a12[[2]]$fit); expect_match(a12[[2]]$reason, "failed on purpose")
+  got <- .bundle_assemble(m, train, "S4", "UK", list(), core, c(a4, a12, a3), 4, 1)
+  expect_identical(no_created(got), no_created(ref))
+  expect_equal(got$boot_attempted, 5L)
+  # a failure keyed on the sample, every piece with a fresh method, made in scrambled order
+  for (uo in c(FALSE, TRUE)) {
+    mk <- function() fail_sample(toy_method(uses_oof = uo), train, 1, 3L)
+    ref <- .fit_bundle(mk(), train, "S4", "UK", list(), 3, 4, 1)
+    core <- .bundle_core(mk(), train, "S4", "UK", list(), 3, 4, 1)
+    a <- c(.boot_attempts(mk(), train, "S4", "UK", list(), 1, c(4L, 3L), core$fold_id, core$vs, core$pool),
+           .boot_attempts(mk(), train, "S4", "UK", list(), 1, 1:2, core$fold_id, core$vs, core$pool))
+    got <- .bundle_assemble(mk(), train, "S4", "UK", list(), core, a, 4, 1)
+    expect_identical(no_created(got), no_created(ref))
+    expect_identical(got$boot_attempted, ref$boot_attempted)
+    expect_identical(got$boot_failed, ref$boot_failed)
+    expect_identical(got$boot_failures, ref$boot_failures)
+    expect_equal(got$boot_failures$b, 3L)
+  }
+})
+
+test_that("assembly raises the attempt-cap warning and the all-failed error as in one task", {
+  train <- make_synthetic_data(200, 1)
+  bad <- function(m, bs) { for (b in bs) m <- fail_sample(m, train, 1, b); m }
+  mk <- function() bad(toy_method(), c(2L, 4L, 6L, 7L, 8L))
+  core <- .bundle_core(mk(), train, "S4", "UK", list(), 3, 4, 1)
+  a <- .boot_attempts(mk(), train, "S4", "UK", list(), 1, 4:1, core$fold_id, core$vs)
+  expect_warning(got <- .bundle_assemble(mk(), train, "S4", "UK", list(), core, a, 4, 1), "3 of 4 .*8 attempts")
+  expect_warning(ref <- .fit_bundle(mk(), train, "S4", "UK", list(), 3, 4, 1), "3 of 4 .*8 attempts")
+  expect_identical(no_created(got), no_created(ref))
+  mk <- function() bad(toy_method(), 1:4)
+  core <- .bundle_core(mk(), train, "S4", "UK", list(), 3, 2, 1)
+  a <- .boot_attempts(mk(), train, "S4", "UK", list(), 1, 1:2, core$fold_id, core$vs)
+  expect_error(.bundle_assemble(mk(), train, "S4", "UK", list(), core, a, 2, 1),
+               "all 4 bootstrap attempts failed for toy")
+})
+
+test_that("assembly needs every attempt 1..B exactly once and the core's settings", {
+  train <- make_synthetic_data(200, 1)
+  core <- .bundle_core(toy_method(), train, "S4", "UK", list(), 3, 3, 1)
+  att <- function(b) .boot_attempts(toy_method(), train, "S4", "UK", list(), 1, b, core$fold_id, core$vs)
+  asm <- function(a, B = 3, seed = 1, tr = train) {
+    .bundle_assemble(toy_method(), tr, "S4", "UK", list(), core, a, B, seed)
+  }
+  expect_error(asm(att(c(1L, 3L))), "missing.*\\b2\\b")
+  expect_error(asm(c(att(1:3), att(2L))), "duplicated.*\\b2\\b")
+  expect_error(asm(att(1:4)), "outside 1\\.\\.3.*\\b4\\b")
+  expect_error(asm(att(1:3), B = 4), "B")
+  expect_error(asm(att(1:3), seed = 2), "seed")
+  expect_error(asm(att(1:3), tr = make_synthetic_data(200, 2)), "training data")
+  core0 <- .bundle_core(toy_method(), train, "S4", "UK", list(), 3, 0, 1)
+  b0 <- .bundle_assemble(toy_method(), train, "S4", "UK", list(), core0, list(), 0, 1)
+  expect_length(b0$boot, 0); expect_identical(b0$boot_attempted, 0L)
+  expect_error(.bundle_assemble(toy_method(), train, "S4", "UK", list(), core0, att(1L), 0, 1), "outside")
+})
+
+test_that(".boot_attempts: a uses_oof method needs the pool; attempts are validated", {
+  train <- make_synthetic_data(200, 1)
+  fid <- rep(1:3, length.out = 200)
+  expect_error(.boot_attempts(toy_method(uses_oof = TRUE), train, "S4", "UK", list(), 1, 1:2, fid),
+               "pool")
+  expect_error(.boot_attempts(toy_method(), train, "S4", "UK", list(), 1, 0L, fid), "attempt")
+  expect_error(.boot_attempts(toy_method(), train, "S4", "UK", list(), 1, 1000L, fid), "attempt")
+  expect_error(.boot_attempts(toy_method(), train, "S4", "UK", list(), 1, c(1L, 1L), fid), "attempt")
+  expect_error(.boot_attempts(toy_method(), train, "S4", "UK", list(), 1, 1L, fid[-1]), "fold_id")
+  expect_identical(.boot_attempts(toy_method(), train, "S4", "UK", list(), 1, integer(), fid), list())
+  r <- .boot_attempts(toy_method(), train, "S4", "UK", list(), 1, 2L, fid)
+  expect_named(r[[1]], c("b", "fit", "reason")); expect_null(r[[1]]$reason)
+})
+
+test_that("the core holds no training data frame and no T-score column", {
+  train <- make_synthetic_data(200, 1)
+  train$T_PF <- 50; train$T_ANX <- 50   # stand-ins for T-score columns (named as .tscores_internal names them)
+  for (uo in c(FALSE, TRUE)) {
+    core <- .bundle_core(toy_method(uses_oof = uo), train, "S4", "UK", list(), 3, 2, 1)
+    expect_false(any(vapply(core, is.data.frame, NA) & names(core) != "pool"))
+    expect_false("train" %in% names(core))
+    if (uo) expect_named(core$pool, c("oof_mu", "oof_resid"))
+    expect_false(any(grepl("T_PF|T_ANX", names(unlist(core)))))
+  }
+})

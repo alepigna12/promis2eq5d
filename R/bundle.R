@@ -136,8 +136,63 @@ BUNDLE_FORMAT <- 2L
 #   (folds = list(), oof = NULL); a uses_oof method then fits the point model
 #   with oof = NULL whatever B is (it computes its own residual pairs, used
 #   for the bootstrap pool and for drawing).
+# It is .bundle_core() (point and fold fits), .boot_attempts() for attempts
+# 1..B and .bundle_assemble() (replacement attempts B + 1, ..., the warning or
+# error, the bundle). The training driver runs these pieces in separate tasks
+# for the long bundles; the result is identical (bar meta$created).
 .fit_bundle <- function(method, train, set, target, variant, K, B, seed, Q = 50,
                         progress = FALSE, vs = NULL, fold_id = NULL, fit_folds = TRUE) {
+  core <- .bundle_core(method, train, set, target, variant, K, B, seed, Q = Q, progress = progress,
+                       vs = vs, fold_id = fold_id, fit_folds = fit_folds)
+  attempts <- .boot_attempts(method, train, set, target, variant, seed, seq_len(B), core$fold_id,
+                             vs = core$vs, pool = core$pool, progress = progress, B = B)
+  .bundle_assemble(method, train, set, target, variant, core, attempts, B, seed, progress = progress)
+}
+
+# The value set of a direct method (vs, else p2e_value_set(target)); NULL for a
+# response method
+.bundle_vs <- function(method, target, vs = NULL) {
+  if (!identical(method$family, "direct")) return(NULL)
+  if (is.null(vs)) return(p2e_value_set(target))
+  if (!inherits(vs, "p2e_vs")) stop("vs must be a p2e_vs object", call. = FALSE)
+  vs
+}
+
+# The training data every fit of a bundle sees: train with y (direct methods:
+# the utility under the value set) and the fold column. Each piece of a bundle
+# (.bundle_core, .boot_attempts, .bundle_assemble) recomputes it, so every task
+# fits on the same data.
+.bundle_train <- function(method, train, target, vs, fold_id) {
+  vs <- .bundle_vs(method, target, vs)
+  if (!is.null(vs)) train[["y"]] <- .score(as.matrix(train[DIMS]), vs)
+  train[["fold"]] <- fold_id
+  train
+}
+
+# The bootstrap strata: train$country as character (an error when missing)
+.boot_strata <- function(train) {
+  if (is.null(train[["country"]])) {
+    stop("train needs a country column (the bootstrap is stratified by country)", call. = FALSE)
+  }
+  if (anyNA(train[["country"]])) {
+    stop("train$country has missing values; the bootstrap is stratified by country", call. = FALSE)
+  }
+  as.character(train[["country"]])
+}
+
+# A uses_oof replicate or point fit without its residual pairs and fold ids
+.drop_oof <- function(f) {
+  f$oof_mu <- NULL; f$oof_resid <- NULL; f$foldid <- NULL
+  f
+}
+
+# Everything of a bundle before the bootstrap: validation (incl. B < 500), the
+# value set, the folds, the point and fold fits, oof, the uses_oof residual
+# pool, y_profiles and state_freq (arguments as .fit_bundle). Returns a
+# p2e_bundle_core: only what the final bundle holds (no training data, no
+# T-score columns), plus the settings and data digest .bundle_assemble() checks.
+.bundle_core <- function(method, train, set, target, variant, K, B, seed, Q = 50,
+                         progress = FALSE, vs = NULL, fold_id = NULL, fit_folds = TRUE) {
   .require_pkgs(method$needs, paste0("fit ", method$id))
   say <- function(...) if (isTRUE(progress)) message(...)
   direct <- identical(method$family, "direct")
@@ -148,13 +203,7 @@ BUNDLE_FORMAT <- 2L
          "(the attempt seeds must stay below the fold seeds)", call. = FALSE)
   }
 
-  if (direct) {
-    if (is.null(vs)) vs <- p2e_value_set(target)
-    else if (!inherits(vs, "p2e_vs")) stop("vs must be a p2e_vs object", call. = FALSE)
-    train[["y"]] <- .score(as.matrix(train[DIMS]), vs)
-  } else {
-    vs <- NULL
-  }
+  vs <- .bundle_vs(method, target, vs)
   y_profiles <- as.matrix(train[DIMS])
   storage.mode(y_profiles) <- "integer"
   dimnames(y_profiles) <- NULL
@@ -175,13 +224,8 @@ BUNDLE_FORMAT <- 2L
       stop("fold_id must use every fold 1..K (a fold is empty)", call. = FALSE)
     }
   }
-  train[["fold"]] <- fold_id
-  if (is.null(train[["country"]])) {
-    stop("train needs a country column (the bootstrap is stratified by country)", call. = FALSE)
-  }
-  if (anyNA(train[["country"]])) {
-    stop("train$country has missing values; the bootstrap is stratified by country", call. = FALSE)
-  }
+  boot_country <- .boot_strata(train)
+  train <- .bundle_train(method, train, target, vs, fold_id)
 
   point <- NULL
   folds <- list()
@@ -235,38 +279,122 @@ BUNDLE_FORMAT <- 2L
     point <- point_fit(NULL)
     oof_pool <- data.frame(oof_mu = point$oof_mu, oof_resid = point$oof_resid)
   }
+  if (uses_oof) point <- .drop_oof(point)
+  train_digest <- .data_digest(train)
 
-  drop_oof <- function(f) {
-    f$oof_mu <- NULL; f$oof_resid <- NULL; f$foldid <- NULL
-    f
+  structure(list(
+    method = method$id, set = set, target = if (direct) vs$code else NA_character_,
+    vs = vs, variant = variant, point = point, folds = folds, fold_id = fold_id,
+    pool = oof_pool, boot_country = if (uses_oof) boot_country,
+    oof = oof, y_profiles = y_profiles, state_freq = state_freq,
+    K = K, Q = Q, B = B, seed = seed, n = n, train_digest = train_digest
+  ), class = "p2e_bundle_core")
+}
+
+# Fits bootstrap attempts b (an integer vector: any subset of 1..999, any
+# order) as .fit_bundle() does: attempt b resamples train within country under
+# seed + b (.boot_index) and fits it (.try_fit); a uses_oof method gets
+# pool[idx, ] (the core's $pool: required), and its fit loses its residual
+# pairs and keeps boot_b and idx_check; slim() is applied. fold_id and vs are
+# the core's (fold_id is needed: the fits see train$fold). Needs no core
+# otherwise, so attempts of a method without a pool can be fitted before or
+# alongside the core. Returns one list(b, fit, reason) per attempt, in the order
+# of b (fit NULL and the reason on failure). B and converged only feed the
+# progress message "boot attempt b (k of B converged)", k = converged plus the
+# attempts converged so far in this call.
+.boot_attempts <- function(method, train, set, target, variant, seed, b, fold_id, vs = NULL,
+                           pool = NULL, progress = FALSE, B = NULL, converged = 0L) {
+  .require_pkgs(method$needs, paste0("fit ", method$id))
+  direct <- identical(method$family, "direct")
+  uses_oof <- direct && isTRUE(method$uses_oof)
+  n <- nrow(train)
+  if (!is.numeric(b) || anyNA(b) || any(b != round(b)) || any(b < 1 | b >= 1000) || anyDuplicated(b)) {
+    stop("bootstrap attempts b must be distinct whole numbers in 1..999", call. = FALSE)
   }
-
-  boot_country <- as.character(train[["country"]])
-  boot <- list()
-  failures <- data.frame(b = integer(), reason = character())
-  b <- 0L
-  while (length(boot) < B && b < 2L * B) {
-    b <- b + 1L
-    say("boot attempt ", b, " (", length(boot), " of ", B, " converged)")
-    r <- .with_fit_seed(seed + b, {
+  b <- as.integer(b)
+  if (length(fold_id) != n || anyNA(fold_id)) {
+    stop("fold_id must have length nrow(train) and no missing values", call. = FALSE)
+  }
+  if (uses_oof && (!is.data.frame(pool) || nrow(pool) != n)) {
+    stop(method$id, " uses out-of-fold residuals: its bootstrap attempts need the core's pool ",
+         "(a data frame with one row per training row)", call. = FALSE)
+  }
+  boot_country <- .boot_strata(train)
+  train <- .bundle_train(method, train, target, vs, fold_id)
+  out <- vector("list", length(b))
+  for (i in seq_along(b)) {
+    bi <- b[i]
+    if (isTRUE(progress)) {
+      message("boot attempt ", bi, if (!is.null(B)) paste0(" (", converged, " of ", B, " converged)"))
+    }
+    r <- .with_fit_seed(seed + bi, {
       idx <- .boot_index(boot_country, n)
-      out <- .try_fit(method, train[idx, , drop = FALSE], set, variant,
-                      if (uses_oof) oof_pool[idx, , drop = FALSE])
-      out$idx <- idx
-      out
+      fr <- .try_fit(method, train[idx, , drop = FALSE], set, variant,
+                     if (uses_oof) pool[idx, , drop = FALSE])
+      fr$idx <- idx
+      fr
     })
-    if (is.null(r$fit)) {
-      failures <- rbind(failures, data.frame(b = b, reason = r$reason))
-    } else {
-      f <- r$fit
+    f <- r$fit
+    if (!is.null(f)) {
       if (uses_oof) {
-        f <- drop_oof(f)
-        f$boot_b <- b
+        f <- .drop_oof(f)
+        f$boot_b <- bi
         f$idx_check <- .idx_check(r$idx)
       }
       if (!is.null(method$slim)) f <- method$slim(f)
-      boot[[length(boot) + 1L]] <- f
+      converged <- converged + 1L
     }
+    out[[i]] <- list(b = bi, fit = f, reason = r$reason)
+  }
+  out
+}
+
+# The bundle from its core and the records of attempts 1..B (.boot_attempts;
+# each b exactly once, any order): takes the converged fits in b order, makes
+# the replacement attempts B + 1, ... while fewer than B converged and fewer
+# than 2B were made, then warns (fewer than B converged) or stops (none) as
+# .fit_bundle() and returns the p2e_bundle. method, set, target, B and seed
+# and the training data must be the core's. meta is made now (repo_commit and
+# repo_dirty from the options, created = now).
+.bundle_assemble <- function(method, train, set, target, variant, core, attempts, B, seed,
+                             progress = FALSE) {
+  if (!inherits(core, "p2e_bundle_core")) stop("core must be a p2e_bundle_core", call. = FALSE)
+  if (!identical(core$method, method$id) || !identical(core$set, set)) {
+    stop("the core is for ", core$method, " (set ", core$set, "), not ", method$id, " (set ", set, ")",
+         call. = FALSE)
+  }
+  if (!isTRUE(all.equal(core$B, B)) || !isTRUE(all.equal(core$seed, seed))) {
+    stop("the core was made with B = ", core$B, " and seed = ", core$seed, ", not B = ", B,
+         " and seed = ", seed, call. = FALSE)
+  }
+  if (!identical(core$n, nrow(train)) || !identical(core$train_digest, .data_digest(train))) {
+    stop("the training data differ from those the core was fitted on", call. = FALSE)
+  }
+  bs <-vapply(attempts, function(a) as.integer(a$b), integer(1))
+  dup <- unique(bs[duplicated(bs)])
+  if (length(dup)) stop("bootstrap attempt(s) duplicated: ", paste(sort(dup), collapse = ", "), call. = FALSE)
+  out <- setdiff(bs, seq_len(B))
+  if (length(out)) {
+    stop("bootstrap attempt(s) outside 1..", B, ": ", paste(sort(out), collapse = ", "), call. = FALSE)
+  }
+  miss <- setdiff(seq_len(B), bs)
+  if (length(miss)) stop("bootstrap attempt(s) missing: ", paste(miss, collapse = ", "), call. = FALSE)
+
+  boot <- list()
+  failures <- data.frame(b = integer(), reason = character())
+  add <- function(r) {
+    if (is.null(r$fit)) {
+      failures <<- rbind(failures, data.frame(b = r$b, reason = r$reason))
+    } else {
+      boot[[length(boot) + 1L]] <<- r$fit
+    }
+  }
+  for (r in attempts[order(bs)]) add(r)
+  b <- as.integer(B)
+  while (length(boot) < B && b < 2L * B) {
+    b <- b + 1L
+    add(.boot_attempts(method, train, set, target, variant, seed, b, core$fold_id, vs = core$vs,
+                       pool = core$pool, progress = progress, B = B, converged = length(boot))[[1]])
   }
   if (B > 0L && !length(boot)) {
     stop("all ", b, " bootstrap attempts failed for ", method$id, call. = FALSE)
@@ -275,15 +403,14 @@ BUNDLE_FORMAT <- 2L
     warning("only ", length(boot), " of ", B, " bootstrap replicates converged after ", b,
             " attempts for ", method$id, call. = FALSE)
   }
-  if (uses_oof) point <- drop_oof(point)
 
   structure(list(
-    method = method$id, set = set, target = if (direct) vs$code else NA_character_,
-    vs = vs, variant = variant, point = point, folds = folds, fold_id = fold_id,
+    method = core$method, set = core$set, target = core$target,
+    vs = core$vs, variant = core$variant, point = core$point, folds = core$folds, fold_id = core$fold_id,
     boot = boot, boot_attempted = b, boot_failed = b - length(boot), boot_failures = failures,
-    pool = oof_pool, boot_country = if (uses_oof) boot_country,
-    oof = oof, y_profiles = y_profiles, state_freq = state_freq,
-    meta = .bundle_meta(method, seed, K, Q, B, n, .data_digest(train))
+    pool = core$pool, boot_country = core$boot_country,
+    oof = core$oof, y_profiles = core$y_profiles, state_freq = core$state_freq,
+    meta = .bundle_meta(method, core$seed, core$K, core$Q, core$B, core$n, core$train_digest)
   ), class = "p2e_bundle")
 }
 
