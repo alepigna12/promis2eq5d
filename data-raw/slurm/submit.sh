@@ -1,12 +1,12 @@
 #!/bin/bash
 # Submits one training stage as a SLURM array:
-#   data-raw/slurm/submit.sh <cv|select|bundle|collect>
+#   data-raw/slurm/submit.sh <cv|select|bundle|core|boot|merge|collect>
 # Adapted from the iHEA_2027 script slurm/submit.sh at tag freeze-ihea2027-abstract-v3.
 # Reads data-raw/slurm/cluster.env (PARTITION, MAX_PARALLEL, PROJECT_DIR, OUT,
 # TSCORE_TABLE, TIME_<STAGE>, MEM_<STAGE>; optional ACCOUNT, R_MODULE).
 # Run this on the login node, never inside an srun allocation (SLURM_* variables
 # would leak through --export=ALL and can clash with --mem). No R runs here.
-# cv and bundle: the unit ids are read from $OUT/submit/<stage>.txt, made beforehand
+# cv, bundle, core, boot and merge: the unit ids are read from $OUT/submit/<stage>.txt, made beforehand
 # by data-raw/slurm/list.sh in an srun session, and copied to the record
 # $OUT/submit/<stamp>_<stage>.txt, one array task per id. select and collect: a
 # one-element array whose single task runs the stage (no ids); the record holds
@@ -20,9 +20,12 @@ set -euo pipefail
 
 stage="${1:-}"
 case "$stage" in
-  cv|select|bundle|collect) ;;
-  *) echo "usage: data-raw/slurm/submit.sh <cv|select|bundle|collect>" >&2; exit 1 ;;
+  cv|select|bundle|core|boot|merge|collect) ;;
+  *) echo "usage: data-raw/slurm/submit.sh <cv|select|bundle|core|boot|merge|collect>" >&2; exit 1 ;;
 esac
+# the stages with one array task per unit id (the others run once, without ids)
+per_unit=0
+case "$stage" in cv|bundle|core|boot|merge) per_unit=1 ;; esac
 STAGE="$(echo "$stage" | tr '[:lower:]' '[:upper:]')"
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,7 +42,7 @@ set +a
 time_var="TIME_${STAGE}"; mem_var="MEM_${STAGE}"
 time="${!time_var:?$time_var is not set in $env_file}"
 mem="${!mem_var:?$mem_var is not set in $env_file}"
-if [ "$stage" = "cv" ] || [ "$stage" = "bundle" ]; then
+if [ "$per_unit" = "1" ]; then
   : "${TSCORE_TABLE:?TSCORE_TABLE is not set in $env_file}"
 fi
 # --account only when ACCOUNT is set (not needed on JHPCE)
@@ -50,7 +53,7 @@ mkdir -p "$PROJECT_DIR/slurm_logs" "$OUT/submit"
 stamp="$(date +%Y%m%d-%H%M%S)"
 list="$OUT/submit/${stamp}_${stage}.txt"
 
-if [ "$stage" = "cv" ] || [ "$stage" = "bundle" ]; then
+if [ "$per_unit" = "1" ]; then
   # the ids list is made beforehand by data-raw/slurm/list.sh inside an srun session
   # (no R runs here); copy it to the dated record of this submission
   src="$OUT/submit/${stage}.txt"
@@ -71,7 +74,7 @@ if [ "$njobs" -eq 0 ]; then
   echo "$list: no units, nothing submitted" >&2
   exit 1
 fi
-if [ "$stage" = "cv" ] || [ "$stage" = "bundle" ]; then
+if [ "$per_unit" = "1" ]; then
   array="1-${njobs}%${MAX_PARALLEL}"
 else
   array="1-1"

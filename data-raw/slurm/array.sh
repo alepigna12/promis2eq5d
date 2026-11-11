@@ -1,8 +1,8 @@
 #!/bin/bash
 # One SLURM array job of the training driver: array index i runs the unit id on
-# line i of the submit list (one unit per task), or, for select and collect, the
-# stage itself (no ids). Adapted from the iHEA_2027 script slurm/array.sh at tag
-# freeze-ihea2027-abstract-v3. Submitted by data-raw/slurm/submit.sh, which passes
+# line i of the submit list (one unit per task: cv, bundle, core, boot, merge),
+# or, for select and collect, the stage itself (no ids). Adapted from the
+# iHEA_2027 script slurm/array.sh at tag freeze-ihea2027-abstract-v3. Submitted by data-raw/slurm/submit.sh, which passes
 # STAGE, SUBMIT_LIST, PROJECT_DIR, OUT, TSCORE_TABLE and SMOKE (and the variables
 # of cluster.env) through --export=ALL.
 #SBATCH --cpus-per-task=1
@@ -15,6 +15,9 @@ set -euo pipefail
 : "${PROJECT_DIR:?PROJECT_DIR is not set}"
 : "${OUT:?OUT is not set}"
 : "${SLURM_ARRAY_TASK_ID:?not running as a SLURM array job}"
+# the stages with one unit id per task (they also read the T-score table)
+per_unit=0
+case "$STAGE" in cv|bundle|core|boot|merge) per_unit=1 ;; esac
 
 cd "$PROJECT_DIR"
 if [ -n "${R_MODULE:-}" ]; then
@@ -37,7 +40,7 @@ dirty=0
 if [ -n "$(git -C "$PROJECT_DIR" status --porcelain)" ]; then dirty=1; fi
 
 args=("$STAGE" --out "$OUT")
-if [ "$STAGE" = "cv" ] || [ "$STAGE" = "bundle" ]; then
+if [ "$per_unit" = "1" ]; then
   : "${TSCORE_TABLE:?TSCORE_TABLE is not set}"
   args+=(--tscore-table "$TSCORE_TABLE")
 fi
@@ -45,7 +48,7 @@ if [ "${SMOKE:-0}" = "1" ]; then args+=(--smoke); fi
 args+=(--commit "$commit" --dirty "$dirty")
 
 ids=()
-if [ "$STAGE" = "cv" ] || [ "$STAGE" = "bundle" ]; then
+if [ "$per_unit" = "1" ]; then
   id="$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$SUBMIT_LIST" | tr -d '\r')"
   if [ -z "${id//[[:space:]]/}" ]; then
     echo "array index $SLURM_ARRAY_TASK_ID: no unit on line $SLURM_ARRAY_TASK_ID of $SUBMIT_LIST"
