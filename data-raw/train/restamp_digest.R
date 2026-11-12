@@ -56,8 +56,8 @@ for (p in files) {
   saveRDS(b2, tmp, compress = "xz")
   if (!file.rename(tmp, out)) stop("could not rename ", tmp, " to ", out)
   chk <- readRDS(out)
-  exp <- b; exp$meta$train_digest <- new_digest
-  same <- identical(chk, exp)
+  expected <- b; expected$meta$train_digest <- new_digest
+  same <- identical(chk, expected)
   cat(sprintf("%s old=%s new=%s identical=%s\n", basename(p), od, new_digest, same))
   if (!same) stop(basename(p), ": re-read output differs from the input beyond meta$train_digest")
 }

@@ -29,6 +29,9 @@ test_that("the defaults predict on training rows in every mode", {
   for (fam in c("response", "direct")) {
     m <- suppressMessages(predict_eq5d(pro, "UK", family = fam))
     expect_equal(nrow(m), 5L)
+    info <- attr(m, "p2e_info")
+    expect_identical(info$method, if (fam == "response") "R06_mvop_dim" else "D03_clad")
+    expect_identical(info$set, "S1")
     expect_true(ok(m$utility))
     ind <- suppressMessages(predict_eq5d(pro, "UK", family = fam, mode = "individual",
                                          draws = 20, seed = 1))

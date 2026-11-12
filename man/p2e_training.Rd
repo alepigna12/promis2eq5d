@@ -6,13 +6,13 @@
 \title{Training data of the shipped fits}
 \format{
 A data frame with 4,512 rows and 37 columns, in this order:
-\describe{
-\item{\code{P1_1} to \code{P8_4}}{The 28 PROMIS-29 items, integer 1 to 5, named by item ID.}
-\item{\code{P9}}{Pain intensity, integer 0 to 10.}
-\item{\code{AGE}}{Age in years, numeric.}
-\item{\code{female}}{Integer, 1 for female and 0 otherwise.}
-\item{\code{country}}{Character, \code{"FR"}, \code{"DE"} or \code{"UK"}.}
-\item{\code{E1} to \code{E5}}{The five EQ-5D-5L dimension responses, integer 1 to 5.}
+\itemize{
+\item \code{P1_1} to \code{P8_4}: the 28 PROMIS-29 items, integer 1 to 5, named by item ID.
+\item \code{P9}: pain intensity, integer 0 to 10.
+\item \code{AGE}: age in years, numeric.
+\item \code{female}: integer, 1 for female and 0 otherwise.
+\item \code{country}: character, \code{"FR"}, \code{"DE"} or \code{"UK"}.
+\item \code{E1} to \code{E5}: the five EQ-5D-5L dimension responses, integer 1 to 5.
 }
 }
 \source{

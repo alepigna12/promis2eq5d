@@ -8,13 +8,13 @@
 #' identifier.
 #'
 #' @format A data frame with 4,512 rows and 37 columns, in this order:
-#' \describe{
-#'   \item{`P1_1` to `P8_4`}{The 28 PROMIS-29 items, integer 1 to 5, named by item ID.}
-#'   \item{`P9`}{Pain intensity, integer 0 to 10.}
-#'   \item{`AGE`}{Age in years, numeric.}
-#'   \item{`female`}{Integer, 1 for female and 0 otherwise.}
-#'   \item{`country`}{Character, `"FR"`, `"DE"` or `"UK"`.}
-#'   \item{`E1` to `E5`}{The five EQ-5D-5L dimension responses, integer 1 to 5.}
+#' \itemize{
+#'   \item `P1_1` to `P8_4`: the 28 PROMIS-29 items, integer 1 to 5, named by item ID.
+#'   \item `P9`: pain intensity, integer 0 to 10.
+#'   \item `AGE`: age in years, numeric.
+#'   \item `female`: integer, 1 for female and 0 otherwise.
+#'   \item `country`: character, `"FR"`, `"DE"` or `"UK"`.
+#'   \item `E1` to `E5`: the five EQ-5D-5L dimension responses, integer 1 to 5.
 #' }
 #' @source Dataverse, doi:10.7910/DVN/FNYYQR (CC0). Built by `data-raw/p2e_training.R`.
 "p2e_training"

@@ -38,10 +38,13 @@ digest_frame <- function() {
 test_that("the data digest has a pinned value", {
   expect_identical(.data_digest(digest_frame()), "53ffbf037c7b77f6535e60704a2620d9")
 })
-test_that("the data digest is the md5 of the serialization payload, without its header", {
+test_that("the data digest ignores the writer-version bytes of the serialization header", {
   d <- digest_frame()[.digest_cols()]
+  s <- serialize(d, NULL, version = 2, xdr = TRUE)
+  s2 <- s; s2[7:10] <- as.raw(c(0, 3, 6, 0))
+  expect_false(identical(s, s2))
   f <- tempfile(); on.exit(unlink(f))
-  writeBin(serialize(d, NULL, version = 2, xdr = TRUE)[-(1:14)], f)
+  writeBin(s2[-(1:14)], f)
   expect_identical(.data_digest(d), unname(tools::md5sum(f)))
 })
 test_that("an old-format bundle is refused with what to do", {
