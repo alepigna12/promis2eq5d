@@ -40,13 +40,20 @@ BUNDLE_FORMAT <- 2L
 .digest_cols <- function() c(ITEMS, "P9", "AGE", "female", "country", DIMS)
 
 # The md5 of the training rows a bundle was fitted on: the predictors, covariates,
-# country and outcome dimensions as a plain data frame (saveRDS, version 3)
+# country and outcome dimensions as a plain data frame. The data are serialized
+# (version 2, xdr) and the 14-byte header (format, writer R version, minimum reader
+# version) is dropped; the uncompressed payload is hashed. Unlike the md5 of a
+# saveRDS() file, this does not depend on the R version, the OS or zlib.
 .data_digest <- function(train) {
   d <- as.data.frame(train)[.digest_cols()]
   rownames(d) <- NULL
-  f <- tempfile(fileext = ".rds")
+  r <- serialize(d, NULL, version = 2, xdr = TRUE)
+  if (!identical(r[1:2], charToRaw("X\n")) || !identical(as.integer(r[3:6]), c(0L, 0L, 0L, 2L))) {
+    stop("unexpected serialization header", call. = FALSE)
+  }
+  f <- tempfile(fileext = ".bin")
   on.exit(unlink(f), add = TRUE)
-  saveRDS(d, f, version = 3)
+  writeBin(r[-(1:14)], f)
   unname(tools::md5sum(f))
 }
 

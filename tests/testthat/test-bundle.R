@@ -27,6 +27,23 @@ test_that("the data digest ignores row names and other columns, and tracks the d
   t3 <- tr; t3$AGE[1] <- t3$AGE[1] + 1L
   expect_false(identical(.data_digest(t3), d))
 })
+digest_frame <- function() {
+  d <- as.data.frame(matrix(rep(c(1L, 2L, 3L), length.out = 3 * length(ITEMS)), 3, length(ITEMS)))
+  names(d) <- ITEMS
+  d$P9 <- c(0L, 5L, 10L); d$AGE <- c(30.5, 45, 62.25); d$female <- c(0L, 1L, 1L)
+  d$country <- c("FR", "DE", "UK")
+  for (v in DIMS) d[[v]] <- c(1L, 3L, 5L)
+  d
+}
+test_that("the data digest has a pinned value", {
+  expect_identical(.data_digest(digest_frame()), "53ffbf037c7b77f6535e60704a2620d9")
+})
+test_that("the data digest is the md5 of the serialization payload, without its header", {
+  d <- digest_frame()[.digest_cols()]
+  f <- tempfile(); on.exit(unlink(f))
+  writeBin(serialize(d, NULL, version = 2, xdr = TRUE)[-(1:14)], f)
+  expect_identical(.data_digest(d), unname(tools::md5sum(f)))
+})
 test_that("an old-format bundle is refused with what to do", {
   d <- withr::local_tempdir(); withr::local_options(promis2eq5d.fit_dir = d)
   b <- .fit_bundle(toy_method(), make_synthetic_data(100, 1), "S4", "UK", list(), 3, 0, 1)
