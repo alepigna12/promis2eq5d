@@ -191,8 +191,7 @@ PROMIS\Sexpr[results=rd]{"\\\\enc{\u00ae}{(R)}"} is a registered trademark of th
 }
 
 \examples{
-\dontrun{
-# Needs the fitted models, which are not part of the package source
+\donttest{
 pro <- data.frame(age = 54, female = 1, Global07 = 4)
 pro[unname(subset(p2e_columns(), type == "item")$column)] <- 2L
 predict_eq5d(pro, "UK")

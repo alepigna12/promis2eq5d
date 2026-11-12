@@ -11,6 +11,8 @@ The package is not on CRAN. Once the repository is public, install it from GitHu
 remotes::install_github("alepigna12/promis2eq5d")
 ```
 
+The fitted models of the R06_mvop_dim, D03_clad and D12_klapproth methods (France, Germany and the UK) are installed with the package. The large R09_chain fits are downloaded separately (see below).
+
 The fitting packages (ordinal, pbivnorm, Matrix, quantreg, glmnet, xgboost) are in Suggests and are needed only for the methods that use them.
 
 ## Example

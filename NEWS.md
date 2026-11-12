@@ -4,3 +4,4 @@
 * Helpers: `p2e_columns()`, `p2e_value_set()`, `p2e_tscores()`, `p2e_download()`, and `summary()` and `as.matrix()` methods for results.
 * The package ships no PROMIS T-score conversion table.
 * `p2e_training`: the CC0 training data (4,512 respondents; PROMIS-29 items, age, sex, country and the EQ-5D-5L responses, no T-scores) are shipped with the package and used for retraining; the age warning now uses the age range of these data.
+* The fits of the response method R06_mvop_dim and the direct methods D03_clad and D12_klapproth (France, Germany, UK) are shipped with the package (`inst/fits`), so `predict_eq5d()` runs for these methods without a download; the training-data digest stored in each fit is now portable across R versions and platforms.

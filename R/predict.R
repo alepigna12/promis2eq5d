@@ -136,8 +136,7 @@ SET_DESCRIPTIONS <- c(
 #'   `boot_failed`.
 #' @seealso [p2e_columns()], [p2e_value_set()], [p2e_tscores()]
 #' @examples
-#' \dontrun{
-#' # Needs the fitted models, which are not part of the package source
+#' \donttest{
 #' pro <- data.frame(age = 54, female = 1, Global07 = 4)
 #' pro[unname(subset(p2e_columns(), type == "item")$column)] <- 2L
 #' predict_eq5d(pro, "UK")
