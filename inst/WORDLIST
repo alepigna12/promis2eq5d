@@ -13,7 +13,9 @@ EuroQol
 exchangeability
 FNYYQR
 glmnet
+GYY
 HealthMeasures
+hec
 iHEA
 isotonic
 klapproth
@@ -21,6 +23,7 @@ lceil
 Leplege
 leq
 lfloor
+Manca
 Mersenne
 multiclass
 mvop
@@ -35,6 +38,7 @@ rceil
 REDCap
 rescored
 rfloor
+Sculpher
 SHA
 Sidey
 tibble

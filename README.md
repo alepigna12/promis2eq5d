@@ -35,6 +35,7 @@ predict_eq5d(my_data, country = "Japan", mode = "individual", draws = 200, seed 
 
 * Getting started with promis2eq5d: `vignette("promis2eq5d", package = "promis2eq5d")`, a worked example of the columns, the three modes and other countries.
 * Methods: `vignette("methods", package = "promis2eq5d")`, the models, the crosswalk and refit, the draw corrections and the conformal intervals.
+* Uncertainty for cost-effectiveness: `vignette("cea-uncertainty", package = "promis2eq5d")`, cohort draws for a two-arm trial, the incremental mean utility and QALYs computed draw by draw, and several rows per person.
 
 ## Large downloads (R09)
 

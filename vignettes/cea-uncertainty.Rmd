@@ -1,0 +1,210 @@
+---
+title: "Uncertainty for cost-effectiveness"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Uncertainty for cost-effectiveness}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+fmt <- function(x) formatC(x, format = "f", digits = 4)
+```
+
+A cost-effectiveness analysis needs more than a point estimate of utility: it
+needs draws of the mean utility of each arm at each time point, aligned so
+that differences and QALYs can be computed draw by draw. This vignette shows
+how to get them from `predict_eq5d()` in cohort mode, how to compute the
+incremental mean utility and the incremental QALY from them, and how to treat
+several rows per person. The modes are introduced in
+`vignette("promis2eq5d", package = "promis2eq5d")` and the models in
+`vignette("methods", package = "promis2eq5d")`. Everything below uses the UK
+value set, the default method, `draws = 200` and a fixed `seed`.
+
+```{r}
+library(promis2eq5d)
+```
+
+## The example trial
+
+`p2e_example_trial` is a small synthetic two-arm trial: 300 persons, 150 in
+each arm (`"control"` and `"treatment"`), each observed at months 0, 6 and 12,
+so 900 rows with one row per person and month. The persons are resampled from
+the UK rows of the training data, and their PROMIS-29 responses at months 6
+and 12 are changed by a made-up treatment effect. It is not a real trial, and
+the effect is made up.
+
+```{r}
+dim(p2e_example_trial)
+head(p2e_example_trial[, c("id", "arm", "month", "age", "female")])
+table(p2e_example_trial$arm, p2e_example_trial$month)
+```
+
+## One cohort call for all arms and months
+
+`mode = "cohort"` with `group = c("arm", "month")` returns, for each draw, the
+mean utility of each of the six arm and month groups:
+
+```{r}
+coh <- predict_eq5d(p2e_example_trial, country = "UK", mode = "cohort",
+                    group = c("arm", "month"), draws = 200, seed = 1)
+coh
+summary(coh)
+```
+
+With neither `family` nor `method`, the call uses the default response method,
+`R06_mvop_dim`, and the message shows that it chose predictor set S1, because
+the trial has the items, pain intensity, age and sex but no T-scores.
+`summary()` gives the mean of the draws and a 95% interval for each group.
+
+The draws of the six groups are aligned. Draw d uses the same bootstrap fit of
+the model for every row, group and time point in the call, so the draws of
+different groups share their parameter uncertainty draw by draw, and a
+difference or a sum over groups computed draw by draw has the right
+correlation. Separate calls are aligned too when they use the same `draws`,
+whatever the seed. Give them different seeds (or none): with the same `seed`,
+rows in the same position of two calls also share their individual random
+numbers, which understates the uncertainty of differences between them. One
+call with `group` avoids the issue.
+
+The draws carry two sources of uncertainty: the parameter uncertainty of the
+mapping (a different bootstrap fit in each draw) and the variation of a
+person's EQ-5D-5L responses given their PROMIS-29 profile (a profile sampled
+for each person in each draw). They are conditional on the persons in the
+data. Sampling uncertainty about the population the trial persons come from,
+for example from a bootstrap of persons, is a separate step that is not shown
+here.
+
+## Incremental mean utility per month
+
+`as.matrix()` gives the draws as a groups by draws matrix, with one row per
+group, named by the group columns:
+
+```{r}
+m <- as.matrix(coh)
+dim(m)
+rownames(m)
+```
+
+The incremental mean utility at each month is the treatment row minus the
+control row, draw by draw:
+
+```{r}
+months <- c(0, 6, 12)
+inc <- sapply(months, function(t) m[paste0("treatment, ", t), ] -
+                                  m[paste0("control, ", t), ])
+colnames(inc) <- paste("month", months)
+round(t(apply(inc, 2, function(x) c(mean = mean(x), quantile(x, c(0.025, 0.975))))), 4)
+```
+
+At month 0, before any effect, the two arms differ only by the chance
+resampling of persons, and the mean difference is close to zero. At months 6
+and 12 the treatment arm is ahead on average. With 150 persons per arm the
+95% intervals are wide relative to the effect: most of their width comes from
+the person-level variation, which averages out only partly over 150 persons.
+
+## QALYs as user code
+
+The package computes no QALYs. They are a few lines of user code on the
+aligned draws. With measurements at months 0, 6 and 12, the area under the
+utility curve of an arm, by the trapezoidal rule with intervals of 0.5 years,
+is
+
+$$
+\text{QALY} = (u_0 + u_6)/2 \times 0.5 + (u_6 + u_{12})/2 \times 0.5 ,
+$$
+
+where $u_t$ is the arm's mean utility at month $t$. Computed for each draw,
+it gives draws of each arm's QALY, and their difference gives draws of the
+incremental QALY:
+
+```{r}
+qaly <- function(m, arm) {
+  u <- function(month) m[paste0(arm, ", ", month), ]
+  (u(0) + u(6)) / 2 * 0.5 + (u(6) + u(12)) / 2 * 0.5
+}
+d_qaly <- qaly(m, "treatment") - qaly(m, "control")
+round(c(mean = mean(d_qaly), quantile(d_qaly, c(0.025, 0.975))), 4)
+```
+
+The arms differ a little at month 0 by chance, and this difference enters the
+incremental QALY above. In the analysis of a real trial the incremental QALY
+is usually adjusted for baseline utility (Manca, Hawkins and Sculpher 2005);
+the draws can be used in such an analysis in the same way, draw by draw.
+
+## Several rows per person
+
+The trial has three rows per person. By default each row's person-level
+random part is drawn independently, as if the three rows came from three
+different persons. With `id = "id"` and `within_id = "common"`, the rows of the
+same person share their random numbers within each draw, so a person's errors
+are perfectly rank-correlated across the three months (for `R06_mvop_dim`,
+the person's latent errors are the same at each month and are combined with
+each month's own predictors). A person whose EQ-5D-5L is drawn better than their
+prediction at month 0 then tends to be drawn better at months 6 and 12 too.
+In both settings the parameter draws stay aligned across all rows.
+
+The same QALY computation under both settings:
+
+```{r}
+coh_ind <- predict_eq5d(p2e_example_trial, country = "UK", mode = "cohort",
+                        group = c("arm", "month"), id = "id",
+                        within_id = "independent", draws = 200, seed = 2)
+coh_com <- predict_eq5d(p2e_example_trial, country = "UK", mode = "cohort",
+                        group = c("arm", "month"), id = "id",
+                        within_id = "common", draws = 200, seed = 3)
+d_ind <- qaly(as.matrix(coh_ind), "treatment") - qaly(as.matrix(coh_ind), "control")
+d_com <- qaly(as.matrix(coh_com), "treatment") - qaly(as.matrix(coh_com), "control")
+round(rbind(
+  independent = c(mean = mean(d_ind), sd = sd(d_ind), quantile(d_ind, c(0.025, 0.975))),
+  common      = c(mean = mean(d_com), sd = sd(d_com), quantile(d_com, c(0.025, 0.975)))
+), 4)
+```
+
+The means agree up to simulation error, but the standard deviation of the
+incremental QALY is `r fmt(sd(d_ind))` under `"independent"` and
+`r fmt(sd(d_com))` under `"common"`, and the interval is correspondingly wider.
+The reason is that an arm's QALY is a weighted sum of its mean utilities over
+time, $u_0/4 + u_6/2 + u_{12}/4$, and therefore the mean over persons of each
+person's own weighted sum. The variance of each person's sum includes the
+covariances between their draws at the three months. Under `"independent"`
+these covariances are zero given the bootstrap fit, so a person's deviations
+at different months partly cancel in the sum. Under `"common"` they are
+strongly positive, and little cancels. The parameter part of
+the uncertainty is the same in both settings; here it is small, as the draws
+of the two arms, which share the bootstrap fit in every draw, are almost
+uncorrelated (correlation
+`r formatC(cor(qaly(as.matrix(coh_ind), "treatment"), qaly(as.matrix(coh_ind), "control")), format = "f", digits = 2)`
+under `"independent"`). With more persons per arm the person-level part
+averages out further, the parameter part weighs more, and the choice matters
+less.
+
+Which setting is right cannot be told from the mapping. The training data are
+cross-sectional, with one row per person, so the correlation of a person's
+errors over time cannot be estimated. The two settings bound it: no
+correlation and perfect rank correlation. The true correlation is likely
+positive and below perfect, so between the two. Use `"common"` as a
+sensitivity analysis next to the default; neither setting is a claim about
+the true correlation.
+
+## Where the draws go next
+
+In a cost-effectiveness analysis the draws of the incremental QALY, together
+with draws of the incremental cost from the analyst's own cost model, feed the
+probabilistic analysis; the package computes no costs.
+
+A cost-effectiveness application of the package to the Gentle Years Yoga
+(GYY) study is forthcoming.
+
+## References
+
+Manca, A., Hawkins, N. and Sculpher, M. J. (2005). Estimating mean QALYs in
+trial-based cost-effectiveness analysis: the importance of controlling for
+baseline utility. *Health Economics*, 14(5), 487--496. doi:10.1002/hec.944.
+
+## Trademarks
+
+EQ-5D™ is a trade mark of the EuroQol Research Foundation.
+
+PROMIS® is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.
