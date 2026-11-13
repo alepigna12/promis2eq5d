@@ -18,3 +18,26 @@
 #' }
 #' @source Dataverse, doi:10.7910/DVN/FNYYQR (CC0). Built by `data-raw/p2e_training.R`.
 "p2e_training"
+
+#' Synthetic example trial
+#'
+#' A small synthetic two-arm trial with three time points, for the vignettes
+#' and examples. The respondents are resampled from the UK rows of
+#' [p2e_training] and followed up with a made-up treatment effect; it is not a
+#' real trial, and the treatment effect is made up. Items are in PROMIS
+#' scoring orientation and carry the user-facing item column names, ready for
+#' [predict_eq5d()]. There are no EQ-5D columns, no T-scores and no country
+#' column.
+#'
+#' @format A data frame with 900 rows (300 persons at 3 times) and 33 columns, in this order:
+#' \itemize{
+#'   \item `id`: person identifier, integer 1 to 300.
+#'   \item `arm`: character, `"control"` or `"treatment"` (150 persons each).
+#'   \item `month`: integer 0, 6 or 12.
+#'   \item 28 item columns, named by item ID (see [p2e_columns()]): integer 1 to 5.
+#'   \item `Global07`: pain intensity, integer 0 to 10.
+#'   \item `age`: age in years at that time, numeric.
+#'   \item `female`: integer, 1 for female and 0 otherwise.
+#' }
+#' @source Synthetic; built by `data-raw/p2e_example_trial.R` from [p2e_training] (Dataverse doi:10.7910/DVN/FNYYQR, CC0).
+"p2e_example_trial"

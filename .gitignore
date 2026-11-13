@@ -8,6 +8,7 @@ handoff-*.md
 /.superpowers/
 /data/*
 !/data/p2e_training.rda
+!/data/p2e_example_trial.rda
 /output/
 /data-raw/slurm/cluster.env
 /slurm_logs/
