@@ -26,7 +26,7 @@
   "shipped fit"
 }
 
-#' Print, summarise and convert prediction results
+#' Print, summarize and convert prediction results
 #'
 #' Methods for the result of [predict_eq5d()].
 #'

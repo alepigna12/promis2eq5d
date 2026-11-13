@@ -1,5 +1,4 @@
 Package: promis2eq5d
-Type: Package
 Title: Map 'PROMIS' Profiles to 'EQ-5D' Utilities with Uncertainty
 URL: https://github.com/alepigna12/promis2eq5d
 BugReports: https://github.com/alepigna12/promis2eq5d/issues
@@ -11,14 +10,15 @@ Authors@R: c(
            comment = c(ORCID = "0009-0003-5654-5907")))
 Description: Predicts 'EQ-5D-5L' utilities and dimension responses from 'PROMIS-29'
     health survey profiles for any country value set in the 'eq5d' package.
-    Supports mean, individual-draw and cohort-draw prediction modes.
+    Supports mean, individual-draw and cohort-draw prediction modes. The
+    models are trained on the data of Fischer (2021) <doi:10.7910/DVN/FNYYQR>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 LazyDataCompression: xz
 Depends: R (>= 4.1.0)
 Imports: eq5d (>= 0.17.0), splines, stats, tools, utils, withr
-Suggests: glmnet, MASS, Matrix, ordinal, pbivnorm, quantreg, testthat (>= 3.2.0), tibble, xgboost (>= 3.2.0)
+Suggests: glmnet, MASS, Matrix, ordinal, pbivnorm, quantreg, testthat (>= 3.2.0), tibble, xgboost (>= 3.2.1.1)
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 Config/roxygen2/version: 8.1.0

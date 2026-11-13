@@ -37,7 +37,7 @@ The R09_chain response method has large fits that are not part of the package. T
 
 ## T-score tables
 
-PROMIS T-score conversion tables are not included in this package. Fits on the T-score sets learn their parameters (for example spline knots and tree split points) from the training T-scores, so some stored parameter values can equal values in a conversion table; the package contains no conversion table, and none is needed to use these fits. If your data have raw domain scores, supply a conversion table obtained from the HealthMeasures Scoring Service (<https://www.healthmeasures.net/score-and-interpret/calculate-scores>) through the `tscore_table` argument (see `?p2e_tscores`), or supply T-score columns directly. Item-level predictor sets need no table.
+PROMIS T-score conversion tables are not included in this package. Fits on the T-score sets learn their parameters (for example spline knots and tree split points) from the training T-scores, so some stored parameter values can equal values in a conversion table; the package contains no conversion table, and none is needed to use these fits. If your data have raw domain scores, supply a conversion table obtained from the HealthMeasures Scoring Service (<https://healthmeasures.net/implement/scoring/calculate-scores/>) through the `tscore_table` argument (see `?p2e_tscores`), or supply T-score columns directly. Item-level predictor sets need no table.
 
 ## Trademarks
 
@@ -45,6 +45,6 @@ EQ-5D™ is a trade mark of the EuroQol Research Foundation.
 
 PROMIS® is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.
 
-## Licence
+## License
 
 MIT.

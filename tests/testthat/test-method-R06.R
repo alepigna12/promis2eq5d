@@ -10,6 +10,7 @@ test_that("R06 common key gives identical profiles for rows of one person with i
   expect_identical(a[1, , ], a[2, , ])
 })
 test_that("R06 mean utility is exact-additive plus remainder for any value set", {
+  skip_on_cran()  # slow: fits stand-in bundles
   b <- stand_in_bundle("R06_mvop_dim", "S3"); nd <- make_synthetic_data(20, 2)
   for (cc in c("UK", "USA")) {
     vs <- p2e_value_set(cc)
@@ -49,6 +50,7 @@ test_that("a saved R06 bundle does not drag the training data along", {
   expect_lt(file.size(f), 5e6)
 })
 test_that("slim R06 fits predict exactly as the full fits", {
+  skip_on_cran()  # slow: fits stand-in bundles
   m <- .p2e_method("R06_mvop_dim"); tr <- make_synthetic_data(300, 1); nd <- tr[1:5, ]
   f <- m$fit(tr, "S3", .p2e_method_variants(m, "S3")[[1]]); s <- m$slim(f)
   expect_false(is.null(f$objective_trace)); expect_false(is.null(f$fit_info$R))

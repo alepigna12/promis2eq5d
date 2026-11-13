@@ -97,6 +97,7 @@ test_that("summary and as.matrix use the recorded id and group columns", {
 })
 
 test_that("draw modes report the bootstrap counts in print and summary", {
+  skip_on_cran()  # asserts the B = 4 of the R06 stand-in bundle, which CRAN runs do not fit
   r <- quiet(predict_eq5d(res_data(), "UK", mode = "individual", draws = 4, seed = 1))
   i <- attr(r, "p2e_info")
   expect_equal(i$boot_attempted, 4L); expect_equal(i$boot_failed, 0L)

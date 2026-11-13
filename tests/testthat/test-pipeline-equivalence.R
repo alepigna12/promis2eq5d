@@ -6,6 +6,7 @@
 .refit <- function(m, fx) withr::with_seed(fx$fit_seed, m$fit(fx$train, fx$set, fx$variant, NULL))
 
 test_that("R06 matches the pipeline (fit, mean and draws)", {
+  skip_on_cran()  # slow: fits stand-in bundles
   skip_if_not_installed("ordinal"); skip_if_not_installed("pbivnorm"); skip_if_not_installed("Matrix")
   fx <- .fx("R06"); m <- .p2e_method("R06"); vs <- p2e_value_set(fx$vt)
   fit <- .refit(m, fx)

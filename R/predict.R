@@ -81,9 +81,9 @@ SET_DESCRIPTIONS <- c(
 #' corrected residual draws (a fixed Monte Carlo seed makes it reproducible),
 #' so mean mode agrees with cohort means. `statistic = "median"` gives the
 #' censored median, which is the pipeline's D03 point prediction. Conformal
-#' intervals for D03 stay centred on the median. `statistic` has no effect on
+#' intervals for D03 stay centered on the median. `statistic` has no effect on
 #' other methods. Likewise, the conformal interval of a crosswalked D12 is
-#' centred on `g(mu-hat)`, the crosswalk of the point prediction, while its mean
+#' centered on `g(mu-hat)`, the crosswalk of the point prediction, while its mean
 #' utility is `E[g(draw)]`, the mean of the crosswalked draws; the two differ
 #' because g is not linear.
 #'

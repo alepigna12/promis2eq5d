@@ -15,6 +15,8 @@ make_synthetic_data <- function(n = 400, seed = 1, countries = c("DE", "UK")) {
   if (!all(countries %in% .SYN_COUNTRIES)) {
     stop("countries must be a subset of: ", paste(.SYN_COUNTRIES, collapse = ", "))
   }
+  testthat::skip_if_not_installed("MASS")  # Suggests; the MASS::mvrnorm stream is unchanged
+
 
   # the RNG kind is pinned, so the data never depend on the caller's RNGkind()
   withr::with_seed(seed, .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",

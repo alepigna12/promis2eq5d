@@ -5,7 +5,7 @@
 \alias{print.p2e_result}
 \alias{summary.p2e_result}
 \alias{as.matrix.p2e_result}
-\title{Print, summarise and convert prediction results}
+\title{Print, summarize and convert prediction results}
 \usage{
 \method{print}{p2e_result}(x, n = 6, ...)
 

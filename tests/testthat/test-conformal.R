@@ -33,6 +33,7 @@ test_that("conformal intervals are ordered, capped and cover about level on held
 })
 
 test_that("response conformal works under a value set never trained on", {
+  skip_on_cran()  # slow: fits stand-in bundles
   b <- stand_in_bundle("R06_mvop_dim", "S3"); te <- make_synthetic_data(20, 7)
   usa <- p2e_value_set("USA")
   ci <- .conformal(b, te, usa, 0.9)
@@ -87,6 +88,7 @@ test_that("a bundle with no fold fits cannot give conformal intervals", {
 })
 
 test_that("response CV+ from oof$state equals the profile route", {
+  skip_on_cran()  # slow: fits the R06 stand-in bundle
   b <- stand_in_bundle("R06_mvop_dim", "S3"); te <- make_synthetic_data(25, 8)
   expect_null(b$oof$profiles)
   expect_equal(dim(b$oof$state), c(400L, 50L)); expect_true(is.integer(b$oof$state))

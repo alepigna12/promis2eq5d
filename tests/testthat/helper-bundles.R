@@ -37,6 +37,9 @@ toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3, bad_call = NULL,
   )
 }
 
+# TRUE under the CRAN setting (NOT_CRAN not "true"), as testthat::skip_on_cran() sees it
+on_cran <- function() !isTRUE(as.logical(Sys.getenv("NOT_CRAN", "false")))
+
 .stand_in_env <- new.env()
 
 # A small R09 variant for the stand-in bundle: the default (first) grid
@@ -48,6 +51,8 @@ R09_TEST_VARIANT <- list(eta = 0.3, max_depth = 2, subsample = 1, colsample_bytr
 # variant; R09_TEST_VARIANT for R09_chain), written to a session temp
 # directory that becomes promis2eq5d.fit_dir.
 stand_in_bundle <- function(method, set, target = NA) {
+  # the R06 stand-ins take 1 to 2 minutes each to fit: CRAN runs use the shipped R06 fits
+  if (method == "R06_mvop_dim") testthat::skip_on_cran()
   key <- paste(method, set, if (is.na(target)) "any" else target, sep = "_")
   if (is.null(.stand_in_env$dir)) {
     .stand_in_env$dir <- tempfile("p2e-fits-")
@@ -67,7 +72,7 @@ stand_in_bundle <- function(method, set, target = NA) {
 
 # Makes sure the stand-in bundles that predict_eq5d() tests need exist.
 use_stand_in_fits <- function() {
-  for (s in c("S1", "S2", "S3")) stand_in_bundle("R06_mvop_dim", s)
+  if (!on_cran()) for (s in c("S1", "S2", "S3")) stand_in_bundle("R06_mvop_dim", s)
   stand_in_bundle("R09_chain", "S3")
   for (s in c("S3", "S1")) for (tg in c("FR", "DE", "UK")) stand_in_bundle("D03_clad", s, tg)
   for (tg in c("FR", "DE", "UK")) stand_in_bundle("D12_klapproth", "S3K", tg)

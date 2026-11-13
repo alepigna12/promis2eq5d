@@ -14,6 +14,7 @@ test_that("a T-score set needs tscore_table", {
 })
 
 test_that("D03 retrain on an item set: target, boot, folds and caching", {
+  skip_on_cran()  # slow: fits stand-in bundles
   cdir <- withr::local_tempdir()
   withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
   shipped <- stand_in_bundle("D03_clad", "S1", "UK")
@@ -40,6 +41,7 @@ test_that("D03 retrain on an item set: target, boot, folds and caching", {
 })
 
 test_that("a cached retrain is read back without refitting", {
+  skip_on_cran()  # slow: fits stand-in bundles
   cdir <- withr::local_tempdir()
   withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
   stand_in_bundle("D03_clad", "S1", "UK")
@@ -115,6 +117,7 @@ test_that("a T-score set retrains with a made-up table", {
 })
 
 test_that("a corrupt cache file warns, is refitted and overwritten", {
+  skip_on_cran()  # slow: fits stand-in bundles
   cdir <- withr::local_tempdir()
   withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
   stand_in_bundle("D03_clad", "S1", "UK")
@@ -217,6 +220,7 @@ test_that("retrain refuses training data that differ from the shipped rows", {
 })
 
 test_that("an old-format cached refit is refitted with a message", {
+  skip_on_cran()  # slow: fits stand-in bundles
   cdir <- withr::local_tempdir()
   withr::local_options(promis2eq5d.training_data = retrain_item_data(), promis2eq5d.cache_dir = cdir)
   stand_in_bundle("D03_clad", "S1", "UK")
@@ -239,6 +243,7 @@ test_that("retrain data that lack a digest column are reported as not matching",
 })
 
 test_that("retrain end to end in all modes", {
+  skip_on_cran()  # slow: fits stand-in bundles
   withr::local_options(promis2eq5d.training_data = retrain_data(),
                        promis2eq5d.cache_dir = withr::local_tempdir())
   stand_in_bundle("D12_klapproth", "S3K", "UK")
