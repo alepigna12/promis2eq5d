@@ -122,3 +122,20 @@ test_that("print works on a result without bootstrap counts", {
   out <- capture.output(print(r))
   expect_false(any(grepl("bootstrap fits", out)))
 })
+
+test_that("summary validates level", {
+  r <- quiet(predict_eq5d(res_data(), "UK", mode = "individual", draws = 4, seed = 1))
+  expect_error(summary(r, level = NA), "strictly between 0 and 1")
+  expect_error(summary(r, level = 1.5), "strictly between 0 and 1")
+})
+
+test_that("print shows the code only when it differs", {
+  r <- quiet(predict_eq5d(res_data(), "UK"))
+  show <- function(name, code) {
+    i <- attr(r, "p2e_info"); i$value_set$name <- name; i$value_set$code <- code
+    attr(r, "p2e_info") <- i
+    capture.output(print(r))
+  }
+  expect_true("value set: UK" %in% show("UK", "UK"))
+  expect_true("value set: France (FR)" %in% show("France", "FR"))
+})

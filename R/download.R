@@ -55,14 +55,14 @@ p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "
     r <- .manifest_rows(method, s)
     if (nrow(r) == 1L) return(r)
     if (identical(set, "all")) {
-      if (!quiet) message("no download is available yet for ", method, " ", s, "; skipping")
+      if (!quiet) message("no download is available for ", method, " ", s, "; skipping")
       return(NULL)
     }
-    stop("no download is available yet for ", method, " ", set, call. = FALSE)
+    stop("no download is available for ", method, " ", set, call. = FALSE)
   })
   rows <- Filter(Negate(is.null), rows)
   if (!length(rows)) {
-    stop("no download is available yet for ", method, " ", set, call. = FALSE)
+    stop("no download is available for ", method, " ", set, call. = FALSE)
   }
   rows <- do.call(rbind, rows)
 

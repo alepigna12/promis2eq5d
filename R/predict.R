@@ -70,13 +70,22 @@ SET_DESCRIPTIONS <- c(
 #' set (slow; `boot` sets the number of bootstrap refits). Interval coverage
 #' for a value set never seen in training relies on exchangeability.
 #'
+#' @section Monte Carlo mean-mode values:
+#' Mean-mode values from Monte Carlo methods (the D03 mean, crosswalked D12,
+#' R09, and R06 under value sets with a non-additive remainder) depend on the
+#' other rows in the call by Monte Carlo error, about 0.002. They are
+#' reproducible for the same data.
+#'
 #' @section D03 mean or median:
 #' With `statistic = "mean"` (default) the D03 utility is the mean of its
 #' corrected residual draws (a fixed Monte Carlo seed makes it reproducible),
 #' so mean mode agrees with cohort means. `statistic = "median"` gives the
 #' censored median, which is the pipeline's D03 point prediction. Conformal
 #' intervals for D03 stay centred on the median. `statistic` has no effect on
-#' other methods.
+#' other methods. Likewise, the conformal interval of a crosswalked D12 is
+#' centred on `g(mu-hat)`, the crosswalk of the point prediction, while its mean
+#' utility is `E[g(draw)]`, the mean of the crosswalked draws; the two differ
+#' because g is not linear.
 #'
 #' @section Draws for direct methods:
 #' `draw_type = "corrected"` (default) draws with the mean preserved:
@@ -165,8 +174,9 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
     stop("seed must be NULL or a single number.", call. = FALSE)
   }
   draw_mode <- mode != "mean"
-  if (draw_mode && !(is.numeric(draws) && length(draws) == 1L && is.finite(draws) && draws >= 1)) {
-    stop("draws must be a single number of at least 1.", call. = FALSE)
+  if (draw_mode && !(is.numeric(draws) && length(draws) == 1L && is.finite(draws) &&
+                                      draws >= 1 && draws == round(draws))) {
+    stop("draws must be a single whole number of at least 1.", call. = FALSE)
   }
   D <- as.integer(draws)
   if (interval && draw_mode) {
@@ -176,6 +186,9 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
   if (interval && !(is.numeric(level) && length(level) == 1L && !is.na(level) &&
                     level > 0 && level < 1)) {
     stop("level must be a single number strictly between 0 and 1.", call. = FALSE)
+  }
+  if (dimensions && mode == "cohort") {
+    warning("dimensions is only used in mean and individual mode; it is ignored.", call. = FALSE)
   }
   if (!is.null(group) && mode != "cohort") {
     warning("group is only used in cohort mode; it is ignored.", call. = FALSE)
@@ -214,8 +227,12 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
   route <- .resolve_bundle(m, set, vs, direct, retrain, crosswalk_from, boot, tscore_table,
                            interval, mode)
   bundle <- route$bundle; knots <- route$knots
+  if (!is.null(crosswalk_from) && is.null(knots)) {
+    warning("crosswalk_from is only used when a direct method is crosswalked; it is ignored.",
+            call. = FALSE)
+  }
 
-  run <- function(expr) if (is.null(seed)) expr else withr::with_seed(seed, expr)
+  run <- function(expr) if (is.null(seed)) expr else .with_fit_seed(seed, expr)
 
   if (mode == "mean") {
     u <- .mean_utility(m, bundle, std, vs, knots, statistic, draw_type)
@@ -271,6 +288,10 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
 # tibble); no tibble or dplyr dependency.
 .plain_frame <- function(data) {
   if (!is.data.frame(data)) stop("`data` must be a data frame.", call. = FALSE)
+  dup <- unique(names(data)[duplicated(names(data))])
+  if (length(dup)) {
+    stop("`data` has duplicate column names: ", paste(dup, collapse = ", "), ".", call. = FALSE)
+  }
   cols <- unclass(data)
   nr <- nrow(data)
   attributes(cols) <- list(names = names(data))

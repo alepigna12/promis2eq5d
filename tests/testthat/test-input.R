@@ -79,3 +79,8 @@ test_that("columns table, age warning and aliases", {
   expect_equal(c(s$P9, s$AGE, s$female), c(4, 15, 0))
   d$female <- NULL; d$sex <- "male"; expect_equal(suppressWarnings(.standardise_input(d))$female, 0)
 })
+
+test_that("duplicate column names are an error", {
+  d <- data.frame(PFA11 = 3, PFA11 = 4, age = 50, check.names = FALSE)
+  expect_error(.plain_frame(d), "duplicate column names: PFA11")
+})

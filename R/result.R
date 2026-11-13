@@ -58,7 +58,8 @@ print.p2e_result <- function(x, n = 6, ...) {
   cat("<p2e_result> ", nrow(x), " rows\n", sep = "")
   cat("method: ", info$method, "\n", sep = "")
   cat("set: ", info$set, " (", SET_DESCRIPTIONS[[info$set]], ")\n", sep = "")
-  cat("value set: ", vs$name, " (", vs$code, ")\n", sep = "")
+  cat("value set: ", vs$name, if (!identical(vs$name, vs$code)) paste0(" (", vs$code, ")"), "\n",
+      sep = "")
   cat("route: ", .result_route(info), "\n", sep = "")
   cat("mode: ", info$mode, "\n", sep = "")
   cat("draws: ", if (is.na(info$draws)) "none (mean mode)" else info$draws, "\n", sep = "")
@@ -94,7 +95,7 @@ summary.p2e_result <- function(object, level = 0.90, ...) {
     u <- df$utility
     return(data.frame(n = length(u), mean = mean(u), sd = stats::sd(u), min = min(u), max = max(u)))
   }
-  if (!(is.numeric(level) && length(level) == 1L && level > 0 && level < 1)) {
+  if (!(is.numeric(level) && length(level) == 1L && !is.na(level) && level > 0 && level < 1)) {
     stop("level must be a single number strictly between 0 and 1.", call. = FALSE)
   }
   if (info$mode == "individual") {

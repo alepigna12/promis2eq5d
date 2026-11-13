@@ -156,6 +156,14 @@ set (slow; \code{boot} sets the number of bootstrap refits). Interval coverage
 for a value set never seen in training relies on exchangeability.
 }
 
+\section{Monte Carlo mean-mode values}{
+
+Mean-mode values from Monte Carlo methods (the D03 mean, crosswalked D12,
+R09, and R06 under value sets with a non-additive remainder) depend on the
+other rows in the call by Monte Carlo error, about 0.002. They are
+reproducible for the same data.
+}
+
 \section{D03 mean or median}{
 
 With \code{statistic = "mean"} (default) the D03 utility is the mean of its
@@ -163,7 +171,10 @@ corrected residual draws (a fixed Monte Carlo seed makes it reproducible),
 so mean mode agrees with cohort means. \code{statistic = "median"} gives the
 censored median, which is the pipeline's D03 point prediction. Conformal
 intervals for D03 stay centred on the median. \code{statistic} has no effect on
-other methods.
+other methods. Likewise, the conformal interval of a crosswalked D12 is
+centred on \code{g(mu-hat)}, the crosswalk of the point prediction, while its mean
+utility is \code{E[g(draw)]}, the mean of the crosswalked draws; the two differ
+because g is not linear.
 }
 
 \section{Draws for direct methods}{

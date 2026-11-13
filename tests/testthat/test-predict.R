@@ -227,3 +227,36 @@ test_that("bad arguments are errors", {
   expect_error(predict_eq5d(nd, "UK", mode = "bad"), "should be one of")
   expect_error(predict_eq5d(nd, "UK", seed = "a"), "seed")
 })
+
+test_that("seed pins the RNG kinds", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  call <- function() quiet(predict_eq5d(nd, "UK", method = "D12", mode = "individual",
+                                        draws = 6, seed = 7))$utility
+  base <- call()
+  lec <- withr::with_seed(1, call(), .rng_kind = "L'Ecuyer-CMRG")
+  expect_identical(lec, base)
+  before <- RNGkind()
+  call()
+  expect_identical(RNGkind(), before)
+  withr::with_seed(1, {
+    k <- RNGkind(); call(); expect_identical(RNGkind(), k)
+  }, .rng_kind = "L'Ecuyer-CMRG")
+})
+
+test_that("draws must be whole", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  expect_error(predict_eq5d(nd, "UK", mode = "individual", draws = 2.5), "single whole number")
+  expect_error(predict_eq5d(nd, "UK", mode = "individual", draws = 0), "single whole number")
+  expect_equal(nrow(quiet(predict_eq5d(nd, "UK", mode = "individual", draws = 3, seed = 1))), 15)
+})
+
+test_that("dimensions in cohort mode warns", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  expect_warning(quiet(predict_eq5d(nd, "UK", mode = "cohort", dimensions = TRUE, draws = 3)),
+                 "dimensions is only used")
+})
+
+test_that("unused crosswalk_from warns", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  expect_warning(quiet(predict_eq5d(nd, "UK", crosswalk_from = "UK")), "crosswalk_from is only used")
+})

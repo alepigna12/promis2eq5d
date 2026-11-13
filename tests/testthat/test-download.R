@@ -83,7 +83,7 @@ test_that(".load_bundle without a manifest row errors with the hint and asks not
   n_ask <- 0L
   local_mocked_bindings(.ask_yes_no = function(...) { n_ask <<- n_ask + 1L; TRUE })
   expect_error(.load_bundle("R09_chain", "S3", NA),
-               "no download is available yet for R09_chain S3.*p2e_download\\('R09_chain', set = 'S3'\\)")
+               "no download is available for R09_chain S3.*p2e_download\\('R09_chain', set = 'S3'\\)")
   expect_equal(n_ask, 0L)
 })
 test_that("no manifest row gives a clear 'not yet available' error", {
@@ -92,7 +92,7 @@ test_that("no manifest row gives a clear 'not yet available' error", {
   local_mocked_bindings(.fit_manifest = function() data.frame(method = character(), set = character(),
     url = character(), sha256 = character(), md5 = character(), bytes = numeric()))
   expect_error(p2e_download("R09_chain", "S3", quiet = TRUE),
-               "no download is available yet for R09_chain S3")
+               "no download is available for R09_chain S3")
 })
 test_that("duplicate manifest rows are a distinct error", {
   local_mocked_bindings(.is_interactive = function() FALSE)

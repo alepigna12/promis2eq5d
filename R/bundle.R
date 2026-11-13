@@ -458,7 +458,7 @@ BUNDLE_FORMAT <- 2L
       paste0("; run p2e_download('R09_chain', set = '", set, "')")
     } else ""
     lead <- if (identical(method, "R09_chain") && !nrow(.manifest_rows(method, set))) {
-      paste0("no download is available yet for ", method, " ", set, "; ")
+      paste0("no download is available for ", method, " ", set, "; ")
     } else ""
     stop(lead, "fit bundle '", file, "' not found (searched: ", paste(dirs, collapse = ", "), ")",
          hint, call. = FALSE)
