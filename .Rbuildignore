@@ -9,3 +9,4 @@
 ^\.Rhistory$
 ^.*\.Rproj$
 ^output$
+^slurm_logs$

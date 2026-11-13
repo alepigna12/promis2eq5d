@@ -113,7 +113,11 @@ Each method uses its preferred predictor set among those the data support
 (items, T-scores, pain intensity and age/sex; see \code{\link[=p2e_columns]{p2e_columns()}}). \code{set}
 forces one of \code{"S1"} to \code{"S4"}. The chosen set is reported in a message and
 in the result. The package ships no PROMIS T-score conversion table: T-score
-sets need T-score columns or a \code{tscore_table} (see \code{\link[=p2e_tscores]{p2e_tscores()}}).
+sets need T-score columns or a \code{tscore_table} (see \code{\link[=p2e_tscores]{p2e_tscores()}}). Fits on
+the T-score sets learn their parameters (for example spline knots and tree
+split points) from the training T-scores, so some stored parameter values can
+equal values in a conversion table; the package contains no conversion table,
+and none is needed to use these fits.
 }
 
 \section{Modes}{

@@ -29,8 +29,7 @@ mean mode, \code{n}, \code{mean}, \code{sd}, \code{min}, \code{max} of \code{uti
 one row per input row with \code{mean}, \code{sd}, \code{lower} and \code{upper}; cohort mode,
 one row per group with \code{n}, \code{mean}, \code{lower} and \code{upper}. \code{as.matrix}
 returns the draws (rows or groups by draws) and is an error in mean mode.
-In the draw modes \code{print} shows "bootstrap fits: \if{html}{\out{<converged>}} of
-\if{html}{\out{<attempted>}} converged" and \code{summary} carries the counts as the attributes
+In the draw modes \code{print} shows \verb{bootstrap fits: <converged> of <attempted> converged} and \code{summary} carries the counts as the attributes
 \code{boot_attempted} and \code{boot_failed}.
 }
 \description{

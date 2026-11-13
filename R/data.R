@@ -9,7 +9,7 @@
 #'
 #' @format A data frame with 4,512 rows and 37 columns, in this order:
 #' \itemize{
-#'   \item `P1_1` to `P8_4`: the 28 PROMIS-29 items, integer 1 to 5, named by item ID.
+#'   \item `P1_1` to `P8_4`: the 28 PROMIS-29 items, integer 1 to 5, named as in the Dataverse file (`P1_1` ... `P8_4`); [p2e_columns()] maps them (`internal` to `column`) for renaming before [predict_eq5d()].
 #'   \item `P9`: pain intensity, integer 0 to 10.
 #'   \item `AGE`: age in years, numeric.
 #'   \item `female`: integer, 1 for female and 0 otherwise.

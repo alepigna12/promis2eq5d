@@ -83,6 +83,7 @@ fi
 cmd=(sbatch --array="$array" --time="$time" --mem="$mem" --cpus-per-task=1
      --partition="$PARTITION" ${account_opt[@]+"${account_opt[@]}"}
      --job-name="p2e_${stage}" --chdir="$PROJECT_DIR"
+     --output="$PROJECT_DIR/slurm_logs/%x_%A_%a.out"
      --export="ALL,STAGE=${stage},SUBMIT_LIST=${list},PROJECT_DIR=${PROJECT_DIR},OUT=${OUT},TSCORE_TABLE=${TSCORE_TABLE:-},SMOKE=${SMOKE:-0}"
      "$PROJECT_DIR/data-raw/slurm/array.sh")
 echo "$list: $njobs unit(s), array $array, time $time, mem $mem"

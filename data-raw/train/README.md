@@ -24,7 +24,7 @@ either unless the author decides so.
 | `core [ids]` | chunked cells: `.bundle_core()` (point and fold fits, out-of-fold predictions, the D03 residual pool), to `<out>/core/<bundle file>` (xz) with seconds, warnings, smoke, commit, dirty, variant, B, K, Q |
 | `boot [ids]` | `.boot_attempts()` for attempts b1..b2 of a chunked cell (no ids = every chunk of `list boot` with the same chunk options), to `<out>/boot/<bundle file stem>_<b1>-<b2>.rds`; D03 reads the residual pool from its core file (an error when it is missing or from another run) |
 | `merge [ids]` | checks that the core and the boot files of the cell exist, have this run's smoke, commit, dirty and variant, and cover 1..B exactly; `.bundle_assemble()` (replacement attempts B + 1, ... as `bundle` makes them) to `<out>/fits/<file>` (xz) and `<out>/bundle_logs/<file>` (seconds = core + chunks + merge, all warnings), so `collect` reads it as a `bundle` output |
-| `collect` | table of every bundle (converged, attempted, failed, variant, xz size, seconds, warnings) and the total size of the CRAN-shipped bundles (all but R09_chain) |
+| `collect` | table of every bundle (target `B`, converged, `short`, attempted, failed, variant, xz size, seconds, warnings) and the total size of the CRAN-shipped bundles (all but R09_chain) |
 
 Settings: `TRAIN_SEED = 20261110` (`units.R`); K = 10, Q = 50, B = 200 (R09: 50). Every
 write goes to `<file>.tmp` and is renamed. Warnings raised in a unit are collected (not
@@ -54,9 +54,16 @@ subsample, so they are not valid for `retrain`.
 
 Measured on the cluster (full size, cv stage): cv R09 0.5 - 6.5 min per unit (0.85 GB max
 RSS); cv D03 16 min to over 3 h per unit (0.5 GB max). These replace the smoke-based cv rows
-below, which were far too low for D03 (and R09). The bundle rows below are NOT reliable: they
-come from the same scaling and are superseded by the measured `core` times (the core of a
-chunked bundle is its point + K fold fits; the core time per fit sets the chunk size).
+below, which were far too low for D03 (and R09). The bundle rows are measured too (cluster
+run 2026-11-12): the core of a chunked bundle is its point + K fold fits, a boot chunk is
+20 (R06) or 25 (D03) bootstrap attempts. Set `--time` (`TIME_*` in `cluster.env`) to about
+3 x the measured maximum of the stage.
+
+Provenance of the shipped bundles: `inst/fits` and the four R09 files on Zenodo
+(10.5281/zenodo.24199380) come from the cluster run of 2026-11-12 at commit 5cf55cb
+(`meta$repo_commit`). Their `meta$train_digest` was re-stamped afterwards by
+`data-raw/train/restamp_digest.R` with the portable digest of commit 294f956, after verifying
+the old cluster digest bundle by bundle; nothing else in the bundles changed.
 
 The original estimates, measured on the laptop (smoke, n = 600), scaled to full size (n = 4,512, K = 10).
 Scaling: one fit costs about linearly in rows, so x7.5 (4512/600) times the ratio of fits.
@@ -71,10 +78,10 @@ which adds to R06 and R09 bundle times: give those extra margin.
 |---|---|---|
 | cv R09 (per config) | 7.3 mean (8 units) | measured: 0.5 - 6.5 min |
 | cv D03 (per variant) | 3.0 mean, 8.9 max (33 units) | measured: 16 min to over 3 h |
-| bundle R06 S1 / S3 / S2 / S4 | 146 / 92 / 100 / 49 | unreliable (was 7.1 h / 4.5 h / 4.9 h / 2.4 h); 12 - 23 h or more expected |
-| bundle R09 (each) | 5.2 - 5.8 | unreliable (was about 5 min); under 1 h expected |
-| bundle D03 (S1 / S2 / S3 / S4) | 3.5 - 5.2 / 0.9 - 4.8 / 3.3 - 3.6 / 1.4 - 1.6 | unreliable (was 10 - 15 min); 1 - 10+ h expected |
-| bundle D12 | 1.3 - 1.8 | about 4 min |
+| bundle R06 S1 / S3 / S2 / S4 | 146 / 92 / 100 / 49 | measured: core 16 - 40 min, boot chunk of 20 attempts max 1 h 09 min (chunk 20) |
+| bundle R09 (each) | 5.2 - 5.8 | measured: 9 - 15 min (2.7 GB max RSS) |
+| bundle D03 (S1 / S2 / S3 / S4) | 3.5 - 5.2 / 0.9 - 4.8 / 3.3 - 3.6 / 1.4 - 1.6 | measured: core 8 - 24 min, boot chunk of 25 attempts max 57 min (chunk 25) |
+| bundle D12 | 1.3 - 1.8 | measured: minutes |
 
 R06 and D03 bundles dominate: they are fitted as `core` + `boot` chunks + `merge`. Whole smoke
 run: cv about 3 min, select seconds, bundle about 8 min.
@@ -102,13 +109,13 @@ unit ids, and `submit.sh` only reads that list and calls `sbatch`.
 5. `cp data-raw/slurm/cluster.env.example data-raw/slurm/cluster.env` (gitignored) and set
    `TSCORE_TABLE` (and `PROJECT_DIR` if the clone is elsewhere). `OUT` is on fastscratch.
    `TIME_CORE`/`MEM_CORE`, `TIME_BOOT`/`MEM_BOOT`, `TIME_MERGE`/`MEM_MERGE` and the chunk sizes
-   `BOOT_CHUNK_R06`, `BOOT_CHUNK_D03` (empty = 20 and 25) are placeholders: set `TIME_BOOT` and
-   the chunk sizes from the measured core times.
-   `TIME_*` are 3 x the projected time of the stage's slowest unit; `MEM_*` were not
-   measured, so check `sacct` MaxRSS after the cv stage.
+   `BOOT_CHUNK_R06`, `BOOT_CHUNK_D03` (empty = 20 and 25, the sizes measured) are set from the
+   cluster run of 2026-11-12.
+   `TIME_*` are about 3 x the measured time of the stage's slowest unit; `MEM_*` were measured
+   only for cv R09 and the R09 bundle, so check `sacct` MaxRSS after the cv stage.
 
-   `TIME_BUNDLE` is 3 h: `bundle` now runs only R09 and D12 (an R09 bundle is about 6 x an R09
-   cv unit, under 1 h; D12 minutes). Check the shared partition's maximum walltime with
+   `TIME_BUNDLE` is 45 min: `bundle` now runs only R09 and D12 (an R09 bundle 9 - 15 min, D12
+   minutes). Check the shared partition's maximum walltime with
    `sinfo -o "%P %l"` before setting a long `TIME_CORE` or `TIME_BOOT`. `PROJECT_DIR`, `OUT` and
    `TSCORE_TABLE` must not contain commas or spaces (`sbatch --export` is comma-delimited).
 

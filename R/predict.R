@@ -34,7 +34,11 @@ SET_DESCRIPTIONS <- c(
 #' (items, T-scores, pain intensity and age/sex; see [p2e_columns()]). `set`
 #' forces one of `"S1"` to `"S4"`. The chosen set is reported in a message and
 #' in the result. The package ships no PROMIS T-score conversion table: T-score
-#' sets need T-score columns or a `tscore_table` (see [p2e_tscores()]).
+#' sets need T-score columns or a `tscore_table` (see [p2e_tscores()]). Fits on
+#' the T-score sets learn their parameters (for example spline knots and tree
+#' split points) from the training T-scores, so some stored parameter values can
+#' equal values in a conversion table; the package contains no conversion table,
+#' and none is needed to use these fits.
 #'
 #' @section Modes:
 #' * `"mean"`: one expected utility per row (`utility`), with `interval = TRUE`

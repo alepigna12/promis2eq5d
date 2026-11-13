@@ -41,8 +41,8 @@
 #'   one row per input row with `mean`, `sd`, `lower` and `upper`; cohort mode,
 #'   one row per group with `n`, `mean`, `lower` and `upper`. `as.matrix`
 #'   returns the draws (rows or groups by draws) and is an error in mean mode.
-#'   In the draw modes `print` shows "bootstrap fits: <converged> of
-#'   <attempted> converged" and `summary` carries the counts as the attributes
+#'   In the draw modes `print` shows `bootstrap fits: <converged> of <attempted>
+#'   converged` and `summary` carries the counts as the attributes
 #'   `boot_attempted` and `boot_failed`.
 #' @seealso [predict_eq5d()]
 #' @name p2e_result

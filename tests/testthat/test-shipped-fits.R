@@ -4,6 +4,7 @@ test_that("every shipped bundle loads, has format 2 and the documented sizes", {
   files <- list.files(system.file("fits", package = "promis2eq5d"), full.names = TRUE)
   expect_length(files, 19L)
   digest <- .data_digest(.training_data())
+  commits <- character()
   for (f in files) {
     b <- readRDS(f)
     expect_s3_class(b, "p2e_bundle")
@@ -11,10 +12,13 @@ test_that("every shipped bundle loads, has format 2 and the documented sizes", {
     expect_equal(b$meta$K, 10L)
     expect_equal(b$meta$n, 4512L)
     expect_identical(b$meta$train_digest, digest)
-    expect_true(b$meta$B %in% c(50L, 200L))
+    expect_identical(b$meta$B, 200L)
+    expect_true(isFALSE(b$meta$repo_dirty))
     expect_false(is.na(b$meta$repo_commit))
+    commits <- c(commits, b$meta$repo_commit)
     expect_true(length(b$boot) == b$meta$B || b$boot_attempted == 2L * b$meta$B)
   }
+  expect_identical(length(unique(commits)), 1L)
 })
 
 test_that("the defaults predict on training rows in every mode", {

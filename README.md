@@ -4,7 +4,7 @@ promis2eq5d maps PROMIS-29 profiles to EQ-5D-5L utilities, with uncertainty. For
 
 ## Installation
 
-The package is not on CRAN. Once the repository is public, install it from GitHub (placeholder until then):
+The package is not yet on CRAN. Install it from GitHub:
 
 ```r
 # install.packages("remotes")
@@ -33,11 +33,11 @@ predict_eq5d(my_data, country = "Japan", mode = "individual", draws = 200, seed 
 
 ## Large downloads (R09)
 
-The R09_chain response method has large fits that are not part of the package. Download them once with `p2e_download("R09_chain")`. The function asks before downloading in an interactive session, and in a non-interactive session needs `options(promis2eq5d.allow_download = TRUE)`. Files are checked against a published checksum and installed in a user cache folder. The files are archived on Zenodo (<https://doi.org/10.5281/zenodo.24199380>).
+The R09_chain response method has large fits that are not part of the package. The fits are downloaded per predictor set: `p2e_download("R09_chain", "S3")` downloads one set, and `set = "all"` downloads all four. Download them once. The function asks before downloading in an interactive session, and in a non-interactive session needs `options(promis2eq5d.allow_download = TRUE)`. Files are checked against a published checksum and installed in a user cache folder. The files are archived on Zenodo (<https://doi.org/10.5281/zenodo.24199380>).
 
 ## T-score tables
 
-PROMIS T-score conversion tables are not included in this package. If your data have raw domain scores, supply a conversion table obtained from the HealthMeasures Scoring Service (<https://www.healthmeasures.net/score-and-interpret/calculate-scores>) through the `tscore_table` argument (see `?p2e_tscores`), or supply T-score columns directly. Item-level predictor sets need no table.
+PROMIS T-score conversion tables are not included in this package. Fits on the T-score sets learn their parameters (for example spline knots and tree split points) from the training T-scores, so some stored parameter values can equal values in a conversion table; the package contains no conversion table, and none is needed to use these fits. If your data have raw domain scores, supply a conversion table obtained from the HealthMeasures Scoring Service (<https://www.healthmeasures.net/score-and-interpret/calculate-scores>) through the `tscore_table` argument (see `?p2e_tscores`), or supply T-score columns directly. Item-level predictor sets need no table.
 
 ## Trademarks
 

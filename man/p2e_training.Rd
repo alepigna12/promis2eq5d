@@ -7,7 +7,7 @@
 \format{
 A data frame with 4,512 rows and 37 columns, in this order:
 \itemize{
-\item \code{P1_1} to \code{P8_4}: the 28 PROMIS-29 items, integer 1 to 5, named by item ID.
+\item \code{P1_1} to \code{P8_4}: the 28 PROMIS-29 items, integer 1 to 5, named as in the Dataverse file (\code{P1_1} ... \code{P8_4}); \code{\link[=p2e_columns]{p2e_columns()}} maps them (\code{internal} to \code{column}) for renaming before \code{\link[=predict_eq5d]{predict_eq5d()}}.
 \item \code{P9}: pain intensity, integer 0 to 10.
 \item \code{AGE}: age in years, numeric.
 \item \code{female}: integer, 1 for female and 0 otherwise.

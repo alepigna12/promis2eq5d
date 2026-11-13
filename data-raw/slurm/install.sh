@@ -12,7 +12,7 @@
 #
 # Never on the login node. From the repo root, either as a batch job:
 #   mkdir -p slurm_logs
-#   sbatch --job-name=p2e_install --partition=shared --cpus-per-task=1 --mem=4G #     --time=00:20:00 --output=slurm_logs/p2e_install_%j.out data-raw/slurm/install.sh
+#   sbatch --job-name=p2e_install --partition=shared --cpus-per-task=1 --mem=4G --time=00:20:00 --output=slurm_logs/p2e_install_%j.out data-raw/slurm/install.sh
 # (20 min once the dependencies are installed; the first run, which may compile
 # some from source, needs about 1 h) or inside an interactive session:
 #   srun --pty --cpus-per-task=1 --mem=4G --time=00:20:00 bash
