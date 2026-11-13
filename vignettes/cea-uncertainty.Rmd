@@ -132,13 +132,12 @@ round(c(mean = mean(d_qaly), quantile(d_qaly, c(0.025, 0.975))), 4)
 ```
 
 The arms differ a little at month 0 by chance, and this difference enters the
-incremental QALY above. In the analysis of a real trial the incremental QALY
-is recommended to be adjusted for baseline utility, by a regression of each
-person's QALY on the arm and the person's baseline utility (Manca, Hawkins and
-Sculpher 2005). The cohort draws are arm means and cannot support that
-regression: it needs per-person utilities, which come from
-`mode = "individual"` (with `id` and `within_id` as below). `as.matrix()` then
-gives a rows by draws matrix, and the regression is run once per draw.
+incremental QALY above.
+
+In a trial analysis, the incremental QALY is usually adjusted for baseline
+utility. That needs each person's utilities, so use `mode = "individual"` (with
+`id`) and run the adjusted analysis once per draw; the cohort draws above are
+arm means and cannot be used for it.
 
 ## Several rows per person
 
@@ -207,12 +206,6 @@ model, feed the probabilistic analysis; the package computes no costs.
 
 A cost-effectiveness application of the package to the Gentle Years Yoga
 (GYY) study is forthcoming.
-
-## References
-
-Manca, A., Hawkins, N. and Sculpher, M. J. (2005). Estimating mean QALYs in
-trial-based cost-effectiveness analysis: the importance of controlling for
-baseline utility. *Health Economics*, 14(5), 487--496. doi:10.1002/hec.944.
 
 ## Trademarks
 
