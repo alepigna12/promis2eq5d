@@ -5,7 +5,7 @@
 \alias{p2e_example_trial}
 \title{Synthetic example trial}
 \format{
-A data frame with 900 rows (300 persons at 3 times) and 33 columns, in this order:
+A data frame with 900 rows (300 persons at 3 times) and 34 columns, in this order:
 \itemize{
 \item \code{id}: person identifier, integer 1 to 300.
 \item \code{arm}: character, \code{"control"} or \code{"treatment"} (150 persons each).

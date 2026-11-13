@@ -133,8 +133,9 @@ $$
 
 The model predicts the censored median $\min(x^\top \hat\beta, 1)$, which is
 not the mean $E[U \mid x]$. The form of $x$ is chosen by cross-validation from
-a small set. On the item sets it is the predictors as numbers, or item-level
-dummy variables selected by a lasso and then refitted by CLAD. On the T-score
+a small set. On the item sets it is the predictors as numbers, or item dummies
+and the other predictors, with columns selected by a lasso and then refitted
+by CLAD. On the T-score
 sets the T-scores (and age, where the set has it) enter linearly, with their
 squares, or as natural cubic splines, and in S3 there is also the spline form
 with interactions of age with physical function and with pain interference;
@@ -206,7 +207,8 @@ $$
 
 where $w_s$ is the number of training respondents in state $s$. States with
 the same value under $X$ are pooled before the fit, and the fitted function is
-anchored at $(\ell_X, \ell_c)$ and $(1, 1)$. Between the fitted points $g$
+anchored at $(\ell_X, \ell_c)$ and $(1, 1)$ where no training state lies at
+those ends. Between the fitted points $g$
 interpolates linearly; beyond them it is constant, and the result is clamped
 to $[\ell_c, 1]$. By default $X$ is the one of the three shipped value sets
 whose crosswalk to $c$ has the lowest weighted root mean squared error over
@@ -244,9 +246,10 @@ user cache folder, from where a later identical call reads them.
 
 In the draw modes, draw $d$ of a call uses bootstrap fit
 $b(d) = ((d - 1) \ \text{mod}\ B) + 1$ for every row, group and time point,
-where $B$ is the number of bootstrap fits. Within that fit, a response method samples one
-profile and scores it; a direct method draws from the fit's predictive
-distribution (corrected as below) and then applies any crosswalk. The draws
+where $B$ is the number of bootstrap fits. Within that fit, a response method
+samples one profile and scores it; a direct method draws from the fit's
+predictive distribution and applies any crosswalk, with the corrections
+below. The draws
 therefore carry both parameter uncertainty and individual variation, and,
 because $b(d)$ depends only on $d$, the draws are aligned across groups and
 time points within a call and across separate calls with the same `draws`.
@@ -260,11 +263,13 @@ correlation cannot be estimated; `"common"` is a sensitivity analysis.
 
 ### Corrections for the direct methods
 
-The draws of both direct methods, as the methods were published, are biased.
-`draw_type = "corrected"` (the default) corrects them so that their mean
-equals the point prediction; `draw_type = "as_published"` returns them as
-published and warns once per call. Each correction is made within each
-bootstrap fit $b$, around that fit's own prediction $\hat\mu_b$.
+The draws of both direct methods, as the methods were published, have known
+flaws. `draw_type = "corrected"` (the default) corrects them: for D12 so that
+the draws' mean equals the clamped point prediction, and for D03 so that no
+draw falls in the gap between full health and the next-best state, which keeps
+the draws' mean. `draw_type = "as_published"` returns them as published and
+warns once per call. Each correction is made within each bootstrap fit $b$;
+for D12 it is made around that fit's own prediction $\hat\mu_b$.
 
 **D12.** As published, the draws are $\hat\mu_b + \sigma_b z$ with $z \sim
 N(0, 1)$, clamped to $[\ell, 1]$. Clamping at full health moves their mean
@@ -406,7 +411,10 @@ repository commit `5cf55cb`). Each fit records the data DOI, the seeds, the
 repository commit, the version of the research code it was ported from, the
 selected variant and the R and package versions. The fits store only what
 prediction needs (coefficients, thresholds, correlation matrices, residual
-pools and selected terms), not the model objects or the training data.
+pools, selected terms and boosted trees (R09), plus the training respondents'
+observed EQ-5D profiles, state counts and fold assignments, which the
+conformal intervals and the crosswalk use), not the model objects or the
+training predictors.
 
 The `R06_mvop_dim`, `D03_clad` and `D12_klapproth` fits are installed with the
 package. The `R09_chain` fits are large (about 106 MB per predictor set) and
@@ -428,11 +436,14 @@ Barber, R. F., Candès, E. J., Ramdas, A. and Tibshirani, R. J. (2021).
 Predictive inference with the jackknife+. *The Annals of Statistics*, 49(1),
 486--507.
 
-Fischer (2021). Data set, Harvard Dataverse. doi:10.7910/DVN/FNYYQR.
+Fischer, F. (2021). Representative PROMIS Profile 29 and EQ-5D Data from
+France, UK, and Germany. Harvard Dataverse. doi:10.7910/DVN/FNYYQR.
 
-Klapproth, C. P. et al. (2020). Predicting EQ-5D-5L crosswalk from the
-PROMIS-29 profile for the United Kingdom, France, and Germany. *Health and
-Quality of Life Outcomes*, 18, 389.
+Klapproth, C. P., van Bebber, J., Sidey-Gibbons, C. J., Valderas, J. M.,
+Leplege, A., Rose, M. and Fischer, F. (2020). Predicting EQ-5D-5L crosswalk
+from the PROMIS-29 profile for the United Kingdom, France, and Germany.
+*Health and Quality of Life Outcomes*, 18, 389.
+doi:10.1186/s12955-020-01629-0.
 
 Powell, J. L. (1984). Least absolute deviations estimation for the censored
 regression model. *Journal of Econometrics*, 25(3), 303--325.

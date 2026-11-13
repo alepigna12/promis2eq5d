@@ -33,7 +33,7 @@ predict_eq5d(my_data, country = "Japan", mode = "individual", draws = 200, seed 
 
 ## Vignettes
 
-* Getting started with promis2eq5d: `vignette("promis2eq5d")`, a worked example of the columns, the three modes and other countries.
+* Getting started with promis2eq5d: `vignette("promis2eq5d", package = "promis2eq5d")`, a worked example of the columns, the three modes and other countries.
 * Methods: `vignette("methods", package = "promis2eq5d")`, the models, the crosswalk and refit, the draw corrections and the conformal intervals.
 
 ## Large downloads (R09)

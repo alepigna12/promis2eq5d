@@ -29,7 +29,7 @@
 #' [predict_eq5d()]. There are no EQ-5D columns, no T-scores and no country
 #' column.
 #'
-#' @format A data frame with 900 rows (300 persons at 3 times) and 33 columns, in this order:
+#' @format A data frame with 900 rows (300 persons at 3 times) and 34 columns, in this order:
 #' \itemize{
 #'   \item `id`: person identifier, integer 1 to 300.
 #'   \item `arm`: character, `"control"` or `"treatment"` (150 persons each).

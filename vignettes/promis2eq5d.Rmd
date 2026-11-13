@@ -71,7 +71,8 @@ The default mode returns one expected utility per row. `interval = TRUE` adds
 a CV+ conformal interval (90% by default; `level` changes it), and
 `dimensions = TRUE` adds the most likely level, 1 to 5, of each EQ-5D dimension
 (`MO` mobility, `SC` self-care, `UA` usual activities, `PD` pain/discomfort,
-`AD` anxiety/depression).
+`AD` anxiety/depression). `dimensions = TRUE` works with response methods
+only; with a direct method it is an error.
 
 ```{r}
 uk <- predict_eq5d(baseline, country = "UK", interval = TRUE, dimensions = TRUE)
@@ -183,7 +184,8 @@ cache folder.
 ## T-scores
 
 PROMIS T-score conversion tables are not included in this package, so the
-T-score sets (S3, S4 and S3K) need T-score columns in your data. Fits on the
+T-score sets (S3, S4 and S3K) need T-score columns in your data (or a
+conversion table, below). Fits on the
 T-score sets learn their parameters (for example spline knots and tree split
 points) from the training T-scores, so some stored parameter values can equal
 values in a conversion table; the package contains no conversion table, and
