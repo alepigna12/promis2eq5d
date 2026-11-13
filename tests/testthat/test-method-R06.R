@@ -57,3 +57,12 @@ test_that("slim R06 fits predict exactly as the full fits", {
   expect_identical(withr::with_seed(1, m$simulate(s, nd, 4, 1:5)), withr::with_seed(1, m$simulate(f, nd, 4, 1:5)))
   expect_identical(m$marginals(s, nd), m$marginals(f, nd))
 })
+test_that("R06 mean with a value-set remainder: FR agrees with 20,000 simulated profiles", {
+  b <- stand_in_bundle("R06_mvop_dim", "S3"); nd <- make_synthetic_data(8, 2)
+  vs <- p2e_value_set("FR"); m <- .p2e_method("R06")
+  res <- withr::with_seed(9, .draw_matrix(b, nd, vs, 20000, 1:8, "corrected", fits = list(b$point)))
+  mc <- rowMeans(res$u)
+  mu <- m$mean_utility(b$point, nd, vs)
+  expect_length(mu, 8)
+  expect_true(all(abs(mu - mc) < 0.01))
+})

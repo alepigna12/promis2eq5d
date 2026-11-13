@@ -77,3 +77,24 @@ test_that(".apply_crosswalk keeps shape, clamps and validates", {
   expect_error(.apply_crosswalk(.5, data.frame(x = c(1, 0), y = c(.5, 1)), t), "knots")
   expect_error(.apply_crosswalk(.5, data.frame(x = c(0, 1), y = c(1, .5)), t), "knots")
 })
+test_that("weighted RMSE picks the weighted source", {
+  # predict_eq5d() weights the states by the shipped UK bundle's state_freq
+  # (here the stand-in's); for USA that moves the choice from UK to FR
+  freq <- stand_in_bundle("D03_clad", "S3", "UK")$state_freq
+  us <- p2e_value_set("USA")
+  expect_identical(.choose_crosswalk_source(us), "UK")
+  expect_identical(.choose_crosswalk_source(us, weights = freq), "FR")
+  # the weighted RMSE of FR really is the lower one under freq, and the higher under equal weights
+  rmse <- function(s, w) { f <- p2e_value_set(s); nw <- w / sum(w)
+    sqrt(sum(nw * (.apply_crosswalk(f$u, .fit_crosswalk(f, us, w), us) - us$u)^2)) }
+  expect_lt(rmse("FR", freq), rmse("UK", freq))
+  expect_gt(rmse("FR", rep(1, 3125)), rmse("UK", rep(1, 3125)))
+  k <- .fit_crosswalk(p2e_value_set(.choose_crosswalk_source(us, weights = freq)), us, freq)
+  expect_identical(attr(k, "from"), "FR"); expect_identical(attr(k, "to"), "US")
+  # and predict_eq5d() takes the weighted source
+  nd <- user_frame(make_synthetic_data(5, 2))
+  msgs <- testthat::capture_messages(
+    res <- predict_eq5d(nd, "USA", family = "direct", draws = 4))
+  expect_match(msgs, "iso crosswalk from FR to USA", all = FALSE)
+  expect_identical(attr(res, "p2e_info")$crosswalk, "FR")
+})

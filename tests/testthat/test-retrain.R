@@ -237,3 +237,28 @@ test_that("retrain data that lack a digest column are reported as not matching",
   expect_error(.retrain_bundle("D03", "S1", p2e_value_set("USA"), mode = "mean", cache = FALSE),
                "do not match the rows the shipped fits.*missing column.*AGE.*p2e_training")
 })
+
+test_that("retrain end to end in all modes", {
+  withr::local_options(promis2eq5d.training_data = retrain_data(),
+                       promis2eq5d.cache_dir = withr::local_tempdir())
+  stand_in_bundle("D12_klapproth", "S3K", "UK")
+  doms <- c("PF", "ANX", "DEP", "FAT", "SLP", "SR", "PI")
+  tb <- do.call(rbind, lapply(seq_along(doms), function(i)
+    data.frame(domain = doms[i], raw = 0:40, tscore = 10 * i + (0:40) / 2)))
+  nd <- user_frame(make_synthetic_data(6, 2))
+  nd <- nd[setdiff(names(nd), TSCORES)]          # the T-scores come from tscore_table
+  nd$arm <- rep(c("a", "b"), 3)
+  run <- function(...) suppressMessages(predict_eq5d(nd, "USA", method = "D12", retrain = TRUE,
+                                                     tscore_table = tb, ...))
+  ok <- function(u, n) {
+    expect_length(u, n)
+    expect_true(all(is.finite(u)) && all(u <= 1))
+  }
+  r1 <- run(mode = "mean")
+  expect_equal(nrow(r1), 6L); ok(r1$utility, 6)
+  r2 <- run(mode = "individual", draws = 4, seed = 1)
+  expect_equal(nrow(r2), 6L * 4L); ok(r2$utility, 24)
+  r3 <- run(mode = "cohort", group = "arm", draws = 4, seed = 1)
+  expect_equal(nrow(r3), 2L * 4L); ok(r3$mean_utility, 8)
+  for (r in list(r1, r2, r3)) expect_true(attr(r, "p2e_info")$retrain)
+})

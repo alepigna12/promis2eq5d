@@ -475,3 +475,23 @@ test_that("the core holds no training data frame and no T-score column", {
     expect_false(any(grepl("T_PF|T_ANX", names(unlist(core)))))
   }
 })
+
+test_that(".load_bundle refuses a file that is not a bundle", {
+  d <- withr::local_tempdir(); withr::local_options(promis2eq5d.fit_dir = d)
+  saveRDS(list(a = 1), file.path(d, .bundle_file("D03_clad", "S4", "UK")))
+  expect_error(.load_bundle("D03_clad", "S4", "UK"), "is not a promis2eq5d fit bundle")
+})
+
+test_that("chunked D03 equals one-task D03", {
+  skip_on_cran()
+  skip_if_not_installed("quantreg")
+  train <- make_synthetic_data(200, 1)
+  m <- .p2e_method("D03"); v <- list(form = "linear")
+  one <- .fit_bundle(m, train, "S3", "UK", v, K = 3, B = 3, seed = 1)
+  core <- .bundle_core(m, train, "S3", "UK", v, 3, 3, 1)
+  a2 <- .boot_attempts(m, train, "S3", "UK", v, 1, 3L, core$fold_id, core$vs, pool = core$pool)
+  a1 <- .boot_attempts(m, train, "S3", "UK", v, 1, 1:2, core$fold_id, core$vs, pool = core$pool)
+  chunked <- .bundle_assemble(m, train, "S3", core$target, v, core, c(a2, a1), 3, 1)
+  expect_length(chunked$boot, 3)
+  expect_identical(no_created(chunked), no_created(one))
+})

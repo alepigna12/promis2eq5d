@@ -171,6 +171,7 @@ test_that("direct path needs a single value set and a value set on the bundle", 
   expect_error(.draw_matrix(b2, nd, p2e_value_set("UK"), 3, 1:2, "corrected"), "no value set")
 })
 test_that("D12 corrected and D03 as_published are not gap-rounded", {
+  withr::local_seed(2)
   vs <- p2e_value_set("UK"); nd <- make_synthetic_data(30, 2); key <- 1:30
   b <- 1 - .vs_gap(vs)
   u12 <- .draw_matrix(stand_in_bundle("D12_klapproth", "S3K", "UK"), nd, vs, 40, key, "corrected")$u
@@ -212,4 +213,16 @@ test_that("the D03 stand-in bundle holds one residual pool, so replicates add li
   train <- make_synthetic_data(400, seed = 1, countries = c("DE", "UK"))
   b0 <- .fit_bundle(m, train, "S3", "UK", .p2e_method_variants(m, "S3")[[1]], K = 3, B = 0, seed = 1)
   expect_lt(length(serialize(b, NULL)), 1.2 * length(serialize(b0, NULL)))
+})
+
+test_that("engine block layout is stable", {
+  skip_on_cran()
+  testthat::local_mocked_bindings(ENGINE_BLOCK = 7L)
+  stand_in_bundle("D12_klapproth", "S3K", "UK")
+  nd <- user_frame(make_synthetic_data(20, 2))
+  u <- suppressMessages(predict_eq5d(nd, "UK", method = "D12", mode = "individual",
+                                     draws = 5, seed = 1))$utility
+  expect_length(u, 100)
+  expect_true(all(is.finite(u) & u <= 1))
+  expect_snapshot_value(signif(u, 8), style = "deparse")
 })

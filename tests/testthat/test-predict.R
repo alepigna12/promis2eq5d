@@ -260,3 +260,19 @@ test_that("unused crosswalk_from warns", {
   nd <- user_frame(make_synthetic_data(5, 2))
   expect_warning(quiet(predict_eq5d(nd, "UK", crosswalk_from = "UK")), "crosswalk_from is only used")
 })
+
+test_that("mean mode leaves the caller's RNG alone", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  set.seed(21); before <- .Random.seed
+  r <- quiet(predict_eq5d(nd, "UK", family = "direct"))
+  expect_identical(.Random.seed, before)
+  expect_length(r$utility, 5)
+})
+
+test_that("interval in draw modes warns", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  for (md in c("individual", "cohort")) {
+    w <- warnings_of(quiet(predict_eq5d(nd, "UK", mode = md, interval = TRUE, draws = 3, seed = 1)))
+    expect_match(w, "only used in mean mode", all = FALSE)
+  }
+})
