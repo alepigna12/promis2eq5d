@@ -10,3 +10,4 @@
 ^.*\.Rproj$
 ^output$
 ^slurm_logs$
+^cran-comments\.md$

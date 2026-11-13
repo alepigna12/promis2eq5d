@@ -11,3 +11,11 @@ test_that("Description cites the training data DOI", {
   expect_true(nzchar(d$Description))
   expect_match(d$Description, "doi:10.7910/DVN/FNYYQR", fixed = TRUE)
 })
+
+test_that("citation() lists the package, the R09 fits and the data", {
+  ct <- citation("promis2eq5d")
+  expect_length(ct, 3)
+  txt <- paste(format(ct, style = "text"), collapse = " ")
+  expect_match(txt, "10.5281/zenodo.24199380", fixed = TRUE)
+  expect_match(txt, "10.7910/DVN/FNYYQR", fixed = TRUE)
+})

@@ -45,6 +45,14 @@ The R09_chain response method has large fits that are not part of the package. T
 
 PROMIS T-score conversion tables are not included in this package. Fits on the T-score sets learn their parameters (for example spline knots and tree split points) from the training T-scores, so some stored parameter values can equal values in a conversion table; the package contains no conversion table, and none is needed to use these fits. If your data have raw domain scores, supply a conversion table obtained from the HealthMeasures Scoring Service (<https://healthmeasures.net/implement/scoring/calculate-scores/>) through the `tscore_table` argument (see `?p2e_tscores`), or supply T-score columns directly. Item-level predictor sets need no table.
 
+## Citation
+
+If you use this package, please cite it, the archived R09 fits and the training data:
+
+```r
+citation("promis2eq5d")
+```
+
 ## Trademarks
 
 EQ-5D™ is a trade mark of the EuroQol Research Foundation.

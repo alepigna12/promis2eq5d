@@ -1,0 +1,41 @@
+citHeader("To cite promis2eq5d, the archived R09 fits or the training data, please use:")
+
+bibentry(
+  bibtype = "Manual",
+  title = "promis2eq5d: Map 'PROMIS' Profiles to 'EQ-5D' Utilities with Uncertainty",
+  author = c(person("Alessio", "Pignatelli"), person("Davide", "Boccaccio")),
+  year = "2026",
+  note = paste("R package version", meta$Version),
+  url = "https://github.com/alepigna12/promis2eq5d",
+  textVersion = paste0(
+    "Pignatelli A, Boccaccio D (2026). promis2eq5d: Map 'PROMIS' Profiles to ",
+    "'EQ-5D' Utilities with Uncertainty. R package version ", meta$Version,
+    ", https://github.com/alepigna12/promis2eq5d.")
+)
+
+bibentry(
+  bibtype = "Misc",
+  title = "promis2eq5d: R09_chain fitted models (three-country training, version 1)",
+  author = c(person("Alessio", "Pignatelli"), person("Davide", "Boccaccio")),
+  year = "2026",
+  publisher = "Zenodo",
+  howpublished = "Zenodo",
+  doi = "10.5281/zenodo.24199380",
+  textVersion = paste0(
+    "Pignatelli A, Boccaccio D (2026). promis2eq5d: R09_chain fitted models ",
+    "(three-country training, version 1). Zenodo. ",
+    "doi:10.5281/zenodo.24199380.")
+)
+
+bibentry(
+  bibtype = "Misc",
+  title = "Representative PROMIS Profile 29 and EQ-5D Data from France, UK, and Germany",
+  author = person("Felix", "Fischer"),
+  year = "2021",
+  publisher = "Harvard Dataverse",
+  howpublished = "Harvard Dataverse",
+  doi = "10.7910/DVN/FNYYQR",
+  textVersion = paste0(
+    "Fischer F (2021). Representative PROMIS Profile 29 and EQ-5D Data from ",
+    "France, UK, and Germany. Harvard Dataverse. doi:10.7910/DVN/FNYYQR.")
+)
