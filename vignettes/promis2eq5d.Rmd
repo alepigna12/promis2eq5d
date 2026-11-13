@@ -59,8 +59,9 @@ There are four predictor sets, plus one used by a single method:
 
 You do not choose the set yourself. Each method has an order of preference
 among the sets, and `predict_eq5d()` uses the first set whose columns are all
-in your data. The example trial has the items, `Global07`, `age` and `female`
-but no T-scores, so the default method uses S1. The chosen set is reported in a
+in your data. S1 is the default method's first choice, and the example trial
+has its columns (the items, `Global07`, `age` and `female`), so the default
+method uses S1. The chosen set is reported in a
 message and stored with the result; `set = "S2"` (for example) forces a set.
 Nothing is imputed: a missing value in a column of the chosen set is an error
 that names the rows.

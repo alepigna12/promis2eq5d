@@ -31,9 +31,9 @@ library(promis2eq5d)
 `p2e_example_trial` is a small synthetic two-arm trial: 300 persons, 150 in
 each arm (`"control"` and `"treatment"`), each observed at months 0, 6 and 12,
 so 900 rows with one row per person and month. The persons are resampled from
-the UK rows of the training data, and their PROMIS-29 responses at months 6
-and 12 are changed by a made-up treatment effect. It is not a real trial, and
-the effect is made up.
+the UK rows of the training data. Their PROMIS-29 responses at months 6 and 12
+change at random in both arms, more often for the better in the treatment arm
+(a made-up effect). It is not a real trial, and the effect is made up.
 
 ```{r}
 dim(p2e_example_trial)
@@ -55,14 +55,14 @@ summary(coh)
 
 With neither `family` nor `method`, the call uses the default response method,
 `R06_mvop_dim`, and the message shows that it chose predictor set S1, because
-the trial has the items, pain intensity, age and sex but no T-scores.
+S1 is the default method's first choice and the trial has its columns.
 `summary()` gives the mean of the draws and a 95% interval for each group.
 
 The draws of the six groups are aligned. Draw d uses the same bootstrap fit of
 the model for every row, group and time point in the call, so the draws of
 different groups share their parameter uncertainty draw by draw, and a
-difference or a sum over groups computed draw by draw has the right
-correlation. Separate calls are aligned too when they use the same `draws`,
+difference or a sum over groups computed draw by draw has the right parameter
+correlation (the within-person part is discussed below). Separate calls are aligned too when they use the same `draws`,
 whatever the seed. Give them different seeds (or none): with the same `seed`,
 rows in the same position of two calls also share their individual random
 numbers, which understates the uncertainty of differences between them. One
@@ -100,9 +100,12 @@ round(t(apply(inc, 2, function(x) c(mean = mean(x), quantile(x, c(0.025, 0.975))
 
 At month 0, before any effect, the two arms differ only by the chance
 resampling of persons, and the mean difference is close to zero. At months 6
-and 12 the treatment arm is ahead on average. With 150 persons per arm the
-95% intervals are wide relative to the effect: most of their width comes from
-the person-level variation, which averages out only partly over 150 persons.
+and 12 the treatment arm is ahead on average, and at month 12 the 95% interval,
+from `r fmt(quantile(inc[, "month 12"], 0.025))` to
+`r fmt(quantile(inc[, "month 12"], 0.975))`, excludes zero. The intervals are
+nonetheless wide, about `r formatC(mean(apply(inc, 2, function(x) diff(quantile(x, c(0.025, 0.975))))), format = "f", digits = 2)`
+across: most of their width comes from the person-level variation, which
+averages out only partly over 150 persons.
 
 ## QALYs as user code
 
@@ -130,8 +133,12 @@ round(c(mean = mean(d_qaly), quantile(d_qaly, c(0.025, 0.975))), 4)
 
 The arms differ a little at month 0 by chance, and this difference enters the
 incremental QALY above. In the analysis of a real trial the incremental QALY
-is usually adjusted for baseline utility (Manca, Hawkins and Sculpher 2005);
-the draws can be used in such an analysis in the same way, draw by draw.
+is recommended to be adjusted for baseline utility, by a regression of each
+person's QALY on the arm and the person's baseline utility (Manca, Hawkins and
+Sculpher 2005). The cohort draws are arm means and cannot support that
+regression: it needs per-person utilities, which come from
+`mode = "individual"` (with `id` and `within_id` as below). `as.matrix()` then
+gives a rows by draws matrix, and the regression is run once per draw.
 
 ## Several rows per person
 
@@ -164,7 +171,9 @@ round(rbind(
 
 The means agree up to simulation error, but the standard deviation of the
 incremental QALY is `r fmt(sd(d_ind))` under `"independent"` and
-`r fmt(sd(d_com))` under `"common"`, and the interval is correspondingly wider.
+`r fmt(sd(d_com))` under `"common"`, and the interval is correspondingly wider;
+under `"common"` it
+`r if (quantile(d_com, 0.025) > 0) "still excludes zero" else "includes zero"`.
 The reason is that an arm's QALY is a weighted sum of its mean utilities over
 time, $u_0/4 + u_6/2 + u_{12}/4$, and therefore the mean over persons of each
 person's own weighted sum. The variance of each person's sum includes the
@@ -174,9 +183,9 @@ at different months partly cancel in the sum. Under `"common"` they are
 strongly positive, and little cancels. The parameter part of
 the uncertainty is the same in both settings; here it is small, as the draws
 of the two arms, which share the bootstrap fit in every draw, are almost
-uncorrelated (correlation
-`r formatC(cor(qaly(as.matrix(coh_ind), "treatment"), qaly(as.matrix(coh_ind), "control")), format = "f", digits = 2)`
-under `"independent"`). With more persons per arm the person-level part
+uncorrelated (under `"independent"` their correlation is close to zero,
+`r format(signif(cor(qaly(as.matrix(coh_ind), "treatment"), qaly(as.matrix(coh_ind), "control")), 2))`).
+With more persons per arm the person-level part
 averages out further, the parameter part weighs more, and the choice matters
 less.
 
@@ -190,9 +199,11 @@ the true correlation.
 
 ## Where the draws go next
 
-In a cost-effectiveness analysis the draws of the incremental QALY, together
-with draws of the incremental cost from the analyst's own cost model, feed the
-probabilistic analysis; the package computes no costs.
+In a cost-effectiveness analysis the draws of the incremental QALY, combined
+with a bootstrap of persons for the sampling uncertainty they leave out (for
+example on individual-mode draws, with one mapping draw per bootstrap
+replicate) and with draws of the incremental cost from the analyst's own cost
+model, feed the probabilistic analysis; the package computes no costs.
 
 A cost-effectiveness application of the package to the Gentle Years Yoga
 (GYY) study is forthcoming.

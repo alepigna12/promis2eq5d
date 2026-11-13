@@ -10,6 +10,8 @@
 #   3. month 12: the same, from the baseline values (not from month 6).
 # Per item: U < p_better -> one step better; U < p_better + 0.05 -> one step
 # worse; otherwise unchanged. Clamped to 1..5 (items) and 0..10 (P9).
+# p_better (made up): control 0.05 at months 6 and 12; treatment 0.35 at
+# month 6 and 0.50 at month 12.
 # Better direction: +1 for P1_* and P7_*; -1 for all other items and for P9.
 
 if (!file.exists("DESCRIPTION") || !dir.exists("data-raw")) stop("run from the package directory")
@@ -22,8 +24,8 @@ arm <- rep(c("control", "treatment"), each = 150L)
 vars <- c(ITEMS, "P9")
 up <- ifelse(grepl("^P1_|^P7_", vars), 1L, -1L)
 lo <- c(rep(1L, length(ITEMS)), 0L); hi <- c(rep(5L, length(ITEMS)), 10L)
-p_better <- list(`6` = c(control = 0.05, treatment = 0.20),
-                 `12` = c(control = 0.05, treatment = 0.30))
+p_better <- list(`6` = c(control = 0.05, treatment = 0.35),
+                 `12` = c(control = 0.05, treatment = 0.50))
 
 B <- as.matrix(base[vars])
 follow <- function(month) {
