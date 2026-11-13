@@ -2,7 +2,8 @@
 #'
 #' Downloads the fitted model bundles that `predict_eq5d()` needs for the
 #' R09_chain method, verifies each file against the published checksum and
-#' installs it in the cache, from where it is found automatically.
+#' installs it in the cache, from where it is found automatically. The files
+#' are hosted on Zenodo, \doi{10.5281/zenodo.24199380}.
 #'
 #' @section Consent:
 #' In an interactive session the function asks before downloading and states
@@ -37,11 +38,10 @@
 #' @return Invisibly, the paths of the installed files.
 #'
 #' @examples
-#' \dontrun{
-#' # Asks first in an interactive session. Non-interactively, set the option:
-#' options(promis2eq5d.allow_download = TRUE)
-#' p2e_download("R09_chain", "S3")
-#' p2e_download("R09_chain", "all")
+#' # Asks first, then downloads about 106 MB per set.
+#' # Non-interactively: options(promis2eq5d.allow_download = TRUE)
+#' if (interactive()) {
+#'   p2e_download("R09_chain", "S3")
 #' }
 #' @export
 p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "all"),
@@ -89,11 +89,26 @@ p2e_download <- function(method = "R09_chain", set = c("S3", "S1", "S4", "S2", "
 }
 
 # The published fit files. Each row: method, set, url, sha256, md5, bytes.
-# Plan 2 fills this with the Zenodo URLs; it is empty until then.
+# The R09_chain fits are archived on Zenodo (https://doi.org/10.5281/zenodo.24199380).
 .fit_manifest <- function() {
-  data.frame(method = character(), set = character(), url = character(),
-             sha256 = character(), md5 = character(), bytes = numeric(),
-             stringsAsFactors = FALSE)
+  sets <- c("S1", "S2", "S3", "S4")
+  data.frame(
+    method = "R09_chain",
+    set = sets,
+    url = paste0("https://zenodo.org/records/24199380/files/R09_chain_", sets,
+                 "_any.rds?download=1"),
+    sha256 = c(
+      "b8a540f08b3be03ea3fffdbfc6ca0e8b2d710b42ddb4f8533fc0933ab3d31dfa",
+      "af03c422b7b640e1ac39100b1ee7e57981107d5cb3c10e62cd464c35877cf696",
+      "42d32fbd983278d166f7de8fa87906fc16f3e651631adb9c175a311dbfa2b978",
+      "9c9dc7e77bc5ed026acc5108aca644ad072dd84fbf23fd2a26d4cdc5527c805d"),
+    md5 = c(
+      "2678156da915961ca555c606f9eb84d4",
+      "1dcf641e9a0c33ec1df244ffb0be5cdb",
+      "c5b579b2b86244bfb725544ee62ee97b",
+      "c988e4c312ce548cb415a344d249f7dc"),
+    bytes = c(106635044, 106341760, 105946824, 106453656),
+    stringsAsFactors = FALSE)
 }
 
 # The manifest rows for (method, set): zero or one. Duplicates are an error.

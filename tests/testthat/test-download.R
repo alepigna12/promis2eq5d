@@ -20,7 +20,8 @@ test_that("a bad checksum is an error and installs nothing", {
 })
 test_that(".load_bundle errors non-interactively and offers the download interactively", {
   local_mocked_bindings(.is_interactive = function() FALSE)
-  withr::local_options(promis2eq5d.fit_dir = tempfile(), promis2eq5d.cache_dir = withr::local_tempdir())
+  withr::local_options(promis2eq5d.fit_dir = tempfile(), promis2eq5d.cache_dir = withr::local_tempdir(),
+                       promis2eq5d.allow_download = NULL)
   expect_error(.load_bundle("R09_chain", "S3", NA), "p2e_download")
 })
 
@@ -170,4 +171,21 @@ test_that("a failed download errors with context, installs nothing and leaves no
   expect_error(p2e_download("R09_chain", "S3", quiet = TRUE), "download of R09_chain S3 failed")
   expect_false(file.exists(file.path(cdir, "fits", .bundle_file("R09_chain", "S3", NA))))
   expect_length(list.files(cdir, recursive = TRUE, all.files = TRUE, pattern = "\\.part$"), 0L)
+})
+
+# --- The real manifest (no mock) ---
+
+test_that("the real manifest lists the four R09_chain fits on Zenodo", {
+  man <- .fit_manifest()
+  expect_equal(nrow(man), 4L)
+  expect_true(all(man$method == "R09_chain"))
+  expect_identical(sort(man$set), c("S1", "S2", "S3", "S4"))
+  expect_false(anyDuplicated(man$set) > 0L)
+  expect_true(all(grepl("^[0-9a-f]{64}$", man$sha256)))
+  expect_true(all(grepl("^[0-9a-f]{32}$", man$md5)))
+  expect_identical(man$url, paste0("https://zenodo.org/records/24199380/files/",
+                                   vapply(man$set, function(s) .bundle_file("R09_chain", s, NA), ""),
+                                   "?download=1"))
+  expect_true(is.numeric(man$bytes))
+  expect_true(all(man$bytes > 1e8))
 })

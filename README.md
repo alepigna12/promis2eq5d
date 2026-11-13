@@ -33,7 +33,7 @@ predict_eq5d(my_data, country = "Japan", mode = "individual", draws = 200, seed 
 
 ## Large downloads (R09)
 
-The R09_chain response method has large fits that are not part of the package. Download them once with `p2e_download("R09_chain")`. The function asks before downloading in an interactive session, and in a non-interactive session needs `options(promis2eq5d.allow_download = TRUE)`. Files are checked against a published checksum and installed in a user cache folder.
+The R09_chain response method has large fits that are not part of the package. Download them once with `p2e_download("R09_chain")`. The function asks before downloading in an interactive session, and in a non-interactive session needs `options(promis2eq5d.allow_download = TRUE)`. Files are checked against a published checksum and installed in a user cache folder. The files are archived on Zenodo (<https://doi.org/10.5281/zenodo.24199380>).
 
 ## T-score tables
 

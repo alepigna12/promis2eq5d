@@ -4,7 +4,11 @@ Title: Map 'PROMIS' Profiles to 'EQ-5D' Utilities with Uncertainty
 URL: https://github.com/alepigna12/promis2eq5d
 BugReports: https://github.com/alepigna12/promis2eq5d/issues
 Version: 0.0.0.9000
-Authors@R: person("Alessio", "Pignatelli", email = "apignat1@jh.edu", role = c("aut", "cre"))
+Authors@R: c(
+    person("Alessio", "Pignatelli", email = "apignat1@jh.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0005-5728-0001")),
+    person("Davide", "Boccaccio", role = "aut",
+           comment = c(ORCID = "0009-0003-5654-5907")))
 Description: Predicts 'EQ-5D-5L' utilities and dimension responses from 'PROMIS-29'
     health survey profiles for any country value set in the 'eq5d' package.
     Supports mean, individual-draw and cohort-draw prediction modes.

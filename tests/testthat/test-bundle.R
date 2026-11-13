@@ -140,7 +140,9 @@ test_that("a pool that cannot be rebuilt is an error", {
   expect_error(.boot_pool(b, b$boot[[1]]), "cannot be rebuilt")
 })
 test_that("missing bundles give an actionable error", {
-  withr::local_options(promis2eq5d.fit_dir = tempfile(), promis2eq5d.cache_dir = tempfile())
+  local_mocked_bindings(.is_interactive = function() FALSE)
+  withr::local_options(promis2eq5d.fit_dir = tempfile(), promis2eq5d.cache_dir = tempfile(),
+                       promis2eq5d.allow_download = NULL)
   expect_error(.load_bundle("R09_chain", "S3", NA), "p2e_download('R09_chain', set = 'S3')", fixed = TRUE)
 })
 test_that("a missing Suggests package is an install hint", {

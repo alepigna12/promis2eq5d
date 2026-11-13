@@ -30,7 +30,8 @@ Invisibly, the paths of the installed files.
 \description{
 Downloads the fitted model bundles that \code{predict_eq5d()} needs for the
 R09_chain method, verifies each file against the published checksum and
-installs it in the cache, from where it is found automatically.
+installs it in the cache, from where it is found automatically. The files
+are hosted on Zenodo, \doi{10.5281/zenodo.24199380}.
 }
 \section{Consent}{
 
@@ -61,10 +62,9 @@ transferred, because the fits are large, and restored afterwards.
 }
 
 \examples{
-\dontrun{
-# Asks first in an interactive session. Non-interactively, set the option:
-options(promis2eq5d.allow_download = TRUE)
-p2e_download("R09_chain", "S3")
-p2e_download("R09_chain", "all")
+# Asks first, then downloads about 106 MB per set.
+# Non-interactively: options(promis2eq5d.allow_download = TRUE)
+if (interactive()) {
+  p2e_download("R09_chain", "S3")
 }
 }

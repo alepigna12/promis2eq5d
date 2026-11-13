@@ -26,11 +26,12 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Alessio Pignatelli \email{apignat1@jh.edu}
+\strong{Maintainer}: Alessio Pignatelli \email{apignat1@jh.edu} (\href{https://orcid.org/0009-0005-5728-0001}{ORCID})
 
 Authors:
 \itemize{
-  \item Alessio Pignatelli \email{apignat1@jh.edu}
+  \item Alessio Pignatelli \email{apignat1@jh.edu} (\href{https://orcid.org/0009-0005-5728-0001}{ORCID})
+  \item Davide Boccaccio (\href{https://orcid.org/0009-0003-5654-5907}{ORCID})
 }
 
 }
