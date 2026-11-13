@@ -1,0 +1,444 @@
+---
+title: "Methods"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Methods}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette describes the models behind `predict_eq5d()`: the four mapping
+methods, the predictor sets, how each family of methods reaches a country's
+value set, how the draws are made and corrected, the conformal intervals, and
+where the shipped fits come from. For a worked example see
+`vignette("promis2eq5d")`.
+
+Notation: $x$ is a person's predictors, $s = (s_1, \dots, s_5)$ an EQ-5D-5L
+health state with levels 1 to 5 on the dimensions mobility (MO), self-care
+(SC), usual activities (UA), pain/discomfort (PD) and anxiety/depression (AD),
+and $u_c(s)$ the utility of state $s$ under the value set of country $c$. Each
+value set covers the 3,125 states, with $u_c(11111) = 1$ and lowest value
+$\ell_c$.
+
+## Two families of methods
+
+A **response method** predicts the distribution of the five dimension
+responses given $x$. A profile or a distribution over profiles can be scored
+under any value set, so one fit serves every country. A **direct method**
+predicts the utility on the scale of one value set. The package ships two
+methods of each family:
+
+| Method | Family | Model | Predictor sets, in order of preference |
+|---|---|---|---|
+| `R06_mvop_dim` (default response) | response | multivariate ordered probit | S1, S3, S2, S4 |
+| `R09_chain` | response | classifier chain of gradient-boosted trees | S3, S1, S4, S2 |
+| `D03_clad` (default direct) | direct | censored least absolute deviations | S3, S4, S1, S2 |
+| `D12_klapproth` | direct | the Klapproth et al. (2020) regression, refitted | S3K |
+
+With neither `family` nor `method`, `predict_eq5d()` uses `R06_mvop_dim`; with
+`family = "direct"` only, `D03_clad`.
+
+## Response methods
+
+### R06_mvop_dim: multivariate ordered probit
+
+Each dimension $j$ has a latent variable
+$y_j^* = x_j^\top \beta_j + \epsilon_j$ and response $s_j = l$ when
+$\alpha_{j,l-1} < y_j^* \leq \alpha_{j,l}$, so that
+
+$$
+P(s_j \leq l \mid x) = \Phi(\alpha_{j,l} - x_j^\top \beta_j),
+\quad (\epsilon_1, \dots, \epsilon_5) \sim N(0, R),
+$$
+
+with ordered thresholds $\alpha_{j,1} < \dots < \alpha_{j,4}$ (the outer
+thresholds $\alpha_{j,0}$ and $\alpha_{j,5}$ are minus and plus infinity) and a $5 \times 5$
+correlation matrix $R$ that is the same for everyone. The correlations let the
+model reproduce how the five responses go together.
+
+Each dimension has its own predictors $x_j$, chosen from the PROMIS domains
+that relate to it:
+
+| Dimension | PROMIS predictors |
+|---|---|
+| MO | physical function, pain interference, pain intensity |
+| SC | physical function |
+| UA | ability to participate in social roles and activities, physical function, fatigue, pain interference |
+| PD | pain interference, pain intensity |
+| AD | anxiety, depression |
+
+On the item sets (S1, S2) these are the domain's items, entered as numbers 1
+to 5; on the T-score sets (S3, S4) the domain T-scores, entered linearly. Age
+and sex enter every dimension in S1 and S3. Sleep disturbance is not used.
+
+The model is estimated by pairwise likelihood: the sum, over the ten pairs of
+dimensions and over persons, of the log of the bivariate normal probability of
+the observed pair of responses. The estimator is iterated two-stage. It starts
+from a separate ordered probit for each dimension and, given those, each
+correlation. It then alternates updates of each dimension's thresholds and
+coefficients with updates of the correlations, and stops when a round improves
+the objective by less than a tolerance, or after ten rounds. A correlation
+matrix that is not positive definite is replaced by the nearest one that is.
+
+**Mean utility.** The value set is split into its least-squares additive part
+and a remainder,
+$u_c(s) = a_c - \sum_j d_c(j, s_j) + r_c(s)$, so that
+
+$$
+E[U \mid x] = a_c - \sum_{j=1}^{5} \sum_{l=1}^{5} P(s_j = l \mid x)\, d_c(j, l)
+  + E[r_c(s) \mid x].
+$$
+
+The first part is exact, from the five marginal distributions. The remainder
+term is the mean over 2,000 simulated profiles; it is zero, and the mean is
+exact, for an additive value set.
+
+### R09_chain: classifier chain
+
+The joint distribution of the profile is factorized in the fixed order PD,
+MO, UA, SC, AD:
+
+$$
+P(s \mid x) = P(s_{PD} \mid x)\, P(s_{MO} \mid x, s_{PD})\,
+  P(s_{UA} \mid x, s_{PD}, s_{MO})\, P(s_{SC} \mid x, s_{PD}, s_{MO}, s_{UA})\,
+  P(s_{AD} \mid x, s_{PD}, s_{MO}, s_{UA}, s_{SC}).
+$$
+
+Each factor is a multiclass gradient-boosted tree classifier ('xgboost') with
+all the predictors of the set plus the levels of the earlier dimensions as
+numeric predictors; in training these are the respondents' observed levels.
+One hyperparameter configuration (learning rate, tree depth, row and column
+subsampling, minimum child weight and number of rounds), chosen by
+cross-validation from 30 random-search configurations, applies to all five
+classifiers. Profiles are
+simulated dimension by dimension in the chain order, and the mean utility is
+the mean of 2,000 simulated profiles scored under the value set.
+
+## Direct methods
+
+### D03_clad: censored least absolute deviations
+
+The utility is modeled as a median regression censored above at full health,
+
+$$
+U = \min(x^\top \beta + e, 1), \quad \text{median}(e \mid x) = 0,
+$$
+
+and $\beta$ is estimated by Powell's (1984) estimator: $\hat\beta$ is the
+value of $\beta$ that minimizes
+
+$$
+\sum_i |y_i - \min(x_i^\top \beta, 1)| .
+$$
+
+The model predicts the censored median $\min(x^\top \hat\beta, 1)$, which is
+not the mean $E[U \mid x]$. The form of $x$ is chosen by cross-validation from
+a small set. On the item sets it is the predictors as numbers, or item-level
+dummy variables selected by a lasso and then refitted by CLAD. On the T-score
+sets the T-scores (and age, where the set has it) enter linearly, with their
+squares, or as natural cubic splines, and in S3 there is also the spline form
+with interactions of age with physical function and with pain interference;
+pain intensity and sex enter linearly. The form is chosen separately for each
+set and for each of the three shipped value sets.
+
+CLAD has no predictive distribution. Its draws are residual draws: the
+prediction $\hat\mu$ plus a residual sampled from the out-of-fold residuals of
+the training respondents whose out-of-fold predictions fall in the same decile
+as $\hat\mu$ (for a bootstrap fit, among the respondents in its resample).
+
+### D12_klapproth: the Klapproth et al. (2020) regression
+
+D12 refits the specification of Klapproth et al. (2020) on the training data.
+The candidate predictors are age, sex and, for each of the seven T-scores
+$T_k$, the terms $T_k$, $T_k^2$ and $T_k^3$: 23 terms in all. The terms are
+selected by backward stepwise regression with the BIC penalty, with no
+hierarchy constraint, and the model is
+
+$$
+U = x^\top \beta + \epsilon, \quad \epsilon \sim N(0, \sigma^2),
+$$
+
+with $\sigma$ the residual standard deviation of the selected model. The
+selection is part of the fit, so it is repeated in every fold fit and every
+bootstrap fit. Pain intensity is not a candidate, as in the paper, so D12 uses
+its own predictor set S3K. The published coefficients are not included in the
+package.
+
+## Predictor sets
+
+| Set | Predictors | Used by |
+|---|---|---|
+| S1 | the 28 items, pain intensity, age, sex | R06, R09, D03 |
+| S2 | the 28 items, pain intensity | R06, R09, D03 |
+| S3 | the 7 T-scores, pain intensity, age, sex | R06, R09, D03 |
+| S4 | the 7 T-scores, pain intensity | R06, R09, D03 |
+| S3K | the 7 T-scores, age, sex | D12 |
+
+Each method uses the first set in its order of preference (table above) whose
+columns are all in the data; `set` forces a set. `p2e_columns()` lists the
+columns and the sets that use each one. The package contains no PROMIS T-score
+conversion table, so the T-score sets need T-score columns in the data, or a
+table supplied through `tscore_table` (see `?p2e_tscores`).
+
+## How each family reaches a country
+
+### Response methods: scoring
+
+A response method gives $P(s \mid x)$, or sampled profiles, and these are
+scored under the target value set: the mean is
+$E[U \mid x] = \sum_s P(s \mid x)\, u_c(s)$ and each sampled profile is scored
+as $u_c(s)$. This works for every value set in the 'eq5d' package and for a
+value set you supply. `retrain` has no effect.
+
+### Direct methods: shipped fits, crosswalk or refit
+
+The direct methods ship fits for France, Germany and the UK, each trained on
+all respondents with their observed profiles scored under that value set. For
+these three countries the fit is used directly.
+
+For any other country, with `retrain = FALSE` (the default), the prediction
+and each draw on a shipped value set $X$ are mapped to the target value set
+$c$ by an isotonic crosswalk $g$: the non-decreasing function that minimizes
+
+$$
+\sum_{s} w_s (u_c(s) - g(u_X(s)))^2 ,
+$$
+
+where $w_s$ is the number of training respondents in state $s$. States with
+the same value under $X$ are pooled before the fit, and the fitted function is
+anchored at $(\ell_X, \ell_c)$ and $(1, 1)$. Between the fitted points $g$
+interpolates linearly; beyond them it is constant, and the result is clamped
+to $[\ell_c, 1]$. By default $X$ is the one of the three shipped value sets
+whose crosswalk to $c$ has the lowest weighted root mean squared error over
+the 3,125 states, with the same weights; `crosswalk_from` chooses it instead.
+The package says in a message that a crosswalk was used, and from which value
+set.
+
+With `retrain = TRUE` the method is refitted on the shipped training data
+rescored under the target value set. The refit reuses the variant selected for
+the shipped UK fit, the same folds and the same seed, with no new
+cross-validation. What is refitted depends on the call:
+
+* in mean mode, the point fit; D03 also needs its out-of-fold residuals, so
+  its point fit includes ten fold fits;
+* with `interval = TRUE`, also the ten fold fits for the conformal interval
+  (for D03 these are the same fold fits);
+* in the draw modes, also the bootstrap fits: `boot` of them (by default all
+  200 of the shipped fit). `boot` has no effect in mean mode.
+
+Refits are slow. The measured times of the training run, on one core of a
+computing cluster, give an idea. For D03 the point and fold fits took 8 to 24
+minutes per set and value set, and a batch of 25 bootstrap fits took up to an
+hour, so a D03 refit with all 200 bootstrap fits takes several hours. With
+`boot = 20` the bootstrap part is a tenth of that, which is enough for a quick
+look at the draws, although fewer bootstrap fits describe the parameter
+uncertainty less well. D12 refits take minutes. D03 refits need the
+'quantreg' and 'glmnet' packages. A refit on a T-score set (S3, S4 or S3K)
+needs `tscore_table`, because the shipped training data have no T-scores. In
+an interactive session the package offers to save the refitted models in a
+user cache folder, from where a later identical call reads them.
+
+## Draws and corrections
+
+### Draws
+
+In the draw modes, draw $d$ of a call uses bootstrap fit
+$b(d) = ((d - 1) \ \text{mod}\ B) + 1$ for every row, group and time point,
+where $B$ is the number of bootstrap fits. Within that fit, a response method samples one
+profile and scores it; a direct method draws from the fit's predictive
+distribution (corrected as below) and then applies any crosswalk. The draws
+therefore carry both parameter uncertainty and individual variation, and,
+because $b(d)$ depends only on $d$, the draws are aligned across groups and
+time points within a call and across separate calls with the same `draws`.
+Cohort mode averages each draw over the members of each group.
+
+With `id` and `within_id = "common"`, rows with the same `id` share their
+individual random numbers within each draw, so a person's errors are perfectly
+rank-correlated across rows. With `within_id = "independent"` (the default)
+they are independent. The training data are cross-sectional, so the true
+correlation cannot be estimated; `"common"` is a sensitivity analysis.
+
+### Corrections for the direct methods
+
+The draws of both direct methods, as the methods were published, are biased.
+`draw_type = "corrected"` (the default) corrects them so that their mean
+equals the point prediction; `draw_type = "as_published"` returns them as
+published and warns once per call. Each correction is made within each
+bootstrap fit $b$, around that fit's own prediction $\hat\mu_b$.
+
+**D12.** As published, the draws are $\hat\mu_b + \sigma_b z$ with $z \sim
+N(0, 1)$, clamped to $[\ell, 1]$. Clamping at full health moves their mean
+below the point prediction, and cohort intervals under-cover. The corrected
+draws are $\min(\max(m + \sigma_b z, \ell), 1)$, with the location $m$ chosen so
+that their mean equals the clamped prediction
+$\tilde\mu_b = \min(\max(\hat\mu_b, \ell), 1)$:
+
+$$
+E[\min(\max(m + \sigma_b Z, \ell), 1)]
+  = \ell\,\Phi(a) + (1 - \Phi(c)) + m(\Phi(c) - \Phi(a))
+  + \sigma_b(\phi(a) - \phi(c)) = \tilde\mu_b,
+$$
+
+with $a = (\ell - m)/\sigma_b$ and $c = (1 - m)/\sigma_b$, solved for $m$ by a
+one-dimensional root search. When $\tilde\mu_b$ is at a bound, the draws are a
+point mass at that bound.
+
+**D03.** As published, many residual draws fall in the gap between the best
+state below full health, with utility $b_c = \max\{u_c(s) : u_c(s) < 1\}$, and
+1, where no state lies. The correction rounds each draw $u$ in the gap,
+$b_c < u < 1$, to 1 with probability $(u - b_c)/(1 - b_c)$ and to $b_c$
+otherwise. This keeps the mean in expectation and empties the gap. It does not
+fully restore the share of respondents in full health; use a response method
+when that share matters.
+
+For a crosswalked country the order is: draw on the shipped value set's scale
+(for D12 with the correction on that scale's bounds), crosswalk each draw, and
+then, for D03, round the gap on the target value set's scale.
+
+### Mean mode
+
+The mean-mode utility of each method is:
+
+* **R06**: the exact mean above (with a Monte Carlo remainder for a value set
+  that is not additive).
+* **R09**: the mean of 2,000 simulated profiles.
+* **D03**: with `statistic = "mean"` (default), the mean of 2,000 corrected
+  residual draws of the point fit (crosswalked when needed), so that mean mode
+  agrees with cohort means;
+  with `statistic = "median"`, the censored median $\min(x^\top \hat\beta, 1)$,
+  which is the method's own point prediction (crosswalked when needed).
+* **D12**: for a shipped value set, the clamped prediction $\tilde\mu$, which
+  is the mean of the corrected draws. For a crosswalked country, the mean of
+  the crosswalked draws, $E[g(\text{draw})]$, by Monte Carlo; this differs
+  from $g(\tilde\mu)$ because $g$ is not linear.
+
+For D03 and D12, `draw_type = "as_published"` makes mean mode return the
+clamped (and crosswalked) point prediction of the method instead.
+
+## Conformal intervals
+
+`interval = TRUE` adds a CV+ prediction interval (Barber et al. 2021) in mean
+mode. The training data are split into $K = 10$ folds, and $\hat\mu_{-k}$ is
+the model fitted without fold $k$. For training respondent $i$ in fold $k(i)$,
+the out-of-fold residual is $R_i = |y_i - \hat\mu_{-k(i)}(x_i)|$.
+For a new person with predictors $x$ and $\alpha = 1 - \text{level}$, the
+interval is
+
+$$
+\left[\, q^-_{\alpha}\{\hat\mu_{-k(i)}(x) - R_i\},\;
+  q^+_{1-\alpha}\{\hat\mu_{-k(i)}(x) + R_i\} \,\right],
+$$
+
+where, with the $n$ values sorted in increasing order, $q^-_\alpha$ is the
+value at position $\lfloor \alpha (n + 1) \rfloor$ and $q^+_{1-\alpha}$ the
+value at position $\lceil (1 - \alpha)(n + 1) \rceil$. The interval is capped
+to $[\ell_c, 1]$.
+
+The package ships the ten fold fits of each method, and the residuals are
+recomputed under the target value set at run time. The outcome $y_i$ is the
+respondent's observed profile scored under the target value set. For a
+response method, $\hat\mu_{-k}(x)$ is the fold fit's mean utility under that
+value set, and the out-of-fold prediction of a training respondent is the mean
+of 50 profiles simulated from their fold fit and scored under it. For a direct
+method, the predictions are the fold fits' point predictions, clamped and
+crosswalked when needed. So the D03 interval is centered on the censored
+median, not on the mean-mode value, and the interval of a crosswalked D12 is
+centered on $g(\hat\mu)$, not on $E[g(\text{draw})]$.
+
+The intervals are per person; uncertainty about a group mean comes from cohort
+mode. Interval coverage for a value set never seen in training relies on
+exchangeability.
+
+## Bootstrap parameter uncertainty
+
+The parameter uncertainty in the draws comes from bootstrap fits: the method
+refitted, with the selected variant, on resamples of the training data drawn
+within each country. The shipped fits have $B = 200$ bootstrap fits for R06,
+D03 and D12, and $B = 50$ for R09. A bootstrap fit that fails or does not
+converge is replaced by a further attempt, until $B$ fits have converged or
+$2B$ attempts have been made. The number of attempts and of failures is stored
+with the fits. In the draw modes `print()` shows them as
+`bootstrap fits: <converged> of <attempted> converged`, and `summary()` carries
+them as the attributes `boot_attempted` and `boot_failed`. Draws and intervals
+are conditional on convergence, which may make them optimistic when many
+attempts failed.
+
+## Reproducibility
+
+`seed` makes the draws reproducible. The draws are made under that seed with
+the random number generator kinds fixed (Mersenne-Twister, Inversion and
+Rejection), so the same seed gives the same draws whatever `RNGkind()` is set
+in the session, and the session's own random stream is left unchanged.
+Without `seed`, the draws use the session's random stream.
+
+Mean-mode values from Monte Carlo methods (the D03 mean, crosswalked D12, R09,
+and R06 under value sets with a non-additive remainder) use a fixed internal
+seed, so they are reproducible for the same data. They depend on the other
+rows in the call by Monte Carlo error, about 0.002.
+
+Separate calls are aligned by `draws`: draw $d$ uses the same bootstrap fit in
+every call with the same `draws`, whatever the seed. Give separate calls
+different seeds (or none): with the same `seed`, rows in the same position of
+two calls share their individual random numbers, which understates the
+uncertainty of differences between them. One call with `group` avoids the
+issue.
+
+## Shipped fits and provenance
+
+The fits are trained on the data of Fischer (2021): 4,512 general-population
+respondents in France, Germany and the UK, with their PROMIS-29 responses and
+EQ-5D-5L profiles (Harvard Dataverse, doi:10.7910/DVN/FNYYQR, CC0). The data
+ship with the package as `p2e_training`. For each method and predictor set,
+and for the direct methods each of the three value sets, the training run:
+
+1. chose the variant by 10-fold cross-validation (folds stratified by country
+   and utility band): the variant with the lowest out-of-fold mean absolute
+   error, with variants within 0.0005 of it treated as tied and the tie broken
+   by the mean negative log-probability of the observed profile (response
+   methods) or the mean continuous ranked probability score of the draws
+   (direct methods); R06 and D12 have a single variant;
+2. fitted the point fit on all respondents;
+3. fitted the ten fold fits and stored the out-of-fold predictions;
+4. fitted the bootstrap fits.
+
+The fits were made on a computing cluster in one run (12 November 2026, at
+repository commit `5cf55cb`). Each fit records the data DOI, the seeds, the
+repository commit, the version of the research code it was ported from, the
+selected variant and the R and package versions. The fits store only what
+prediction needs (coefficients, thresholds, correlation matrices, residual
+pools and selected terms), not the model objects or the training data.
+
+The `R06_mvop_dim`, `D03_clad` and `D12_klapproth` fits are installed with the
+package. The `R09_chain` fits are large (about 106 MB per predictor set) and
+are archived on Zenodo (doi:10.5281/zenodo.24199380); `p2e_download()`
+downloads them and checks each file against its published checksum.
+
+Fits on the T-score sets learn their parameters (for example spline knots and
+tree split points) from the training T-scores, so some stored parameter values
+can equal values in a conversion table; the package contains no conversion
+table, and none is needed to use these fits.
+
+## Evaluation
+
+The predictive performance of the methods is reported in the accompanying iHEA paper (forthcoming).
+
+## References
+
+Barber, R. F., Candès, E. J., Ramdas, A. and Tibshirani, R. J. (2021).
+Predictive inference with the jackknife+. *The Annals of Statistics*, 49(1),
+486--507.
+
+Fischer (2021). Data set, Harvard Dataverse. doi:10.7910/DVN/FNYYQR.
+
+Klapproth, C. P. et al. (2020). Predicting EQ-5D-5L crosswalk from the
+PROMIS-29 profile for the United Kingdom, France, and Germany. *Health and
+Quality of Life Outcomes*, 18, 389.
+
+Powell, J. L. (1984). Least absolute deviations estimation for the censored
+regression model. *Journal of Econometrics*, 25(3), 303--325.
+
+## Trademarks
+
+EQ-5D™ is a trade mark of the EuroQol Research Foundation.
+
+PROMIS® is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.

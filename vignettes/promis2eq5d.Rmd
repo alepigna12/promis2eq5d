@@ -1,0 +1,200 @@
+---
+title: "Getting started with promis2eq5d"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with promis2eq5d}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+promis2eq5d maps PROMIS-29 profiles to EQ-5D-5L utilities, with uncertainty.
+This vignette walks through one analysis: it reads the columns the package
+needs, predicts UK utilities in each of the three modes, and then uses the
+value set of another country. The models themselves are described in
+`vignette("methods", package = "promis2eq5d")`.
+
+```{r}
+library(promis2eq5d)
+```
+
+## The data
+
+The package ships a small synthetic trial, `p2e_example_trial`: 300 persons in
+two arms (`"control"` and `"treatment"`), each observed at months 0, 6 and 12.
+The respondents are resampled from the UK rows of the training data and the
+treatment effect is made up, so it is not a real trial. This vignette uses the month-0 rows, one
+row per person.
+
+```{r}
+baseline <- subset(p2e_example_trial, month == 0)
+dim(baseline)
+names(baseline)
+```
+
+## Columns and predictor sets
+
+`p2e_columns()` lists every column the package reads: the 28 PROMIS-29 items
+under their HealthMeasures item IDs (integers 1 to 5, in PROMIS scoring
+orientation), the pain intensity item `Global07` (0 to 10), the seven domain
+T-scores, and age and sex. The last column shows which predictor sets use each
+column.
+
+```{r}
+p2e_columns()
+```
+
+There are four predictor sets, plus one used by a single method:
+
+| Set | Predictors |
+|---|---|
+| S1 | items, pain intensity, age and sex |
+| S2 | items and pain intensity |
+| S3 | T-scores, pain intensity, age and sex |
+| S4 | T-scores and pain intensity |
+| S3K | T-scores, age and sex (`D12_klapproth` only) |
+
+You do not choose the set yourself. Each method has an order of preference
+among the sets, and `predict_eq5d()` uses the first set whose columns are all
+in your data. The example trial has the items, `Global07`, `age` and `female`
+but no T-scores, so the default method uses S1. The chosen set is reported in a
+message and stored with the result; `set = "S2"` (for example) forces a set.
+Nothing is imputed: a missing value in a column of the chosen set is an error
+that names the rows.
+
+## Mean mode
+
+The default mode returns one expected utility per row. `interval = TRUE` adds
+a CV+ conformal interval (90% by default; `level` changes it), and
+`dimensions = TRUE` adds the most likely level, 1 to 5, of each EQ-5D dimension
+(`MO` mobility, `SC` self-care, `UA` usual activities, `PD` pain/discomfort,
+`AD` anxiety/depression).
+
+```{r}
+uk <- predict_eq5d(baseline, country = "UK", interval = TRUE, dimensions = TRUE)
+uk
+summary(uk)
+```
+
+With neither `family` nor `method`, the package uses the default response
+method, `R06_mvop_dim`. A response method predicts the five dimension
+responses and scores them under the value set, so the same fits serve every
+country. The printed header records the method, the set, the value set, the
+route to the value set and the mode. The result is a data frame with these
+details in its attributes.
+
+The conformal interval is a per-person interval. It does not describe the
+uncertainty of a group mean; for that, use cohort mode.
+
+## Individual mode
+
+`mode = "individual"` returns `draws` draws of the utility for each row. Each
+draw combines parameter uncertainty (draw d uses one bootstrap fit of the
+model) and individual variation (a profile sampled from that fit). `seed`
+makes the draws reproducible.
+
+```{r}
+ind <- predict_eq5d(baseline, country = "UK", mode = "individual",
+                    draws = 200, seed = 1)
+ind
+head(summary(ind))
+dim(as.matrix(ind))
+```
+
+The result is in long form, one row per input row and draw. `summary()` gives
+the mean, standard deviation and a 90% interval of each row's draws, and
+`as.matrix()` gives a rows by draws matrix for your own code. The header line
+`bootstrap fits` reports how many bootstrap fits were attempted when the model
+was fitted and how many converged; draws and intervals are conditional on the
+converged fits.
+
+## Cohort mode
+
+`mode = "cohort"` returns, for each draw, the mean utility of each group named
+by `group`. This is the form a probabilistic sensitivity analysis needs.
+
+```{r}
+coh <- predict_eq5d(baseline, country = "UK", mode = "cohort", group = "arm",
+                    draws = 200, seed = 2)
+coh
+summary(coh)
+```
+
+`summary()` gives the mean of the draws and a 95% interval for each group.
+Draw d uses the same bootstrap fit in every group, so the difference between
+the arms can be computed draw by draw with the correct correlation:
+
+```{r}
+m <- as.matrix(coh)
+delta <- m["treatment", ] - m["control", ]
+quantile(delta, c(0.025, 0.5, 0.975))
+```
+
+Within one call the draws are aligned across all groups and time points.
+Separate calls with the same `draws` are aligned too, whatever the seed; give
+them different seeds (or none), as here, because with the same `seed` rows in
+the same position of two calls also share their individual random numbers.
+
+## Another country
+
+The response methods score their predictions under the value set of any
+country in the 'eq5d' package, or under a value set you supply as a table of
+the 3,125 states (see `?p2e_value_set`). Here is the US value set with the
+default response method:
+
+```{r}
+us <- predict_eq5d(baseline, country = "USA")
+us
+```
+
+The direct methods (`D03_clad` and `D12_klapproth`) predict the utility on the
+scale of one value set, and ship fits for France, Germany and the UK only. For
+any other country they use an isotonic crosswalk from one of those three value
+sets (and say so in a message), or, with `retrain = TRUE`, refit the method on
+the training data rescored under that country's value set, which is slow.
+`family = "direct"` selects the default direct method, `D03_clad`:
+
+```{r}
+us_direct <- predict_eq5d(baseline, country = "USA", family = "direct")
+us_direct
+```
+
+## The R09_chain method
+
+The response method `R09_chain` has large fits that are not installed with the
+package. They are archived on Zenodo and downloaded once per predictor set, so
+the code below is not run here. `R09_chain` prefers set S3, which needs
+T-scores; for item-only data such as the example trial it uses S1, so download
+that set instead.
+
+```{r, eval = FALSE}
+p2e_download("R09_chain", "S3")
+predict_eq5d(my_data, country = "UK", method = "R09_chain")
+```
+
+In an interactive session `p2e_download()` asks before downloading. In a
+non-interactive session it needs `options(promis2eq5d.allow_download = TRUE)`.
+Each file is checked against a published checksum and installed in a user
+cache folder.
+
+## T-scores
+
+PROMIS T-score conversion tables are not included in this package, so the
+T-score sets (S3, S4 and S3K) need T-score columns in your data. Fits on the
+T-score sets learn their parameters (for example spline knots and tree split
+points) from the training T-scores, so some stored parameter values can equal
+values in a conversion table; the package contains no conversion table, and
+none is needed to use these fits. If your data have only the item responses,
+you can supply a conversion table obtained from the HealthMeasures Scoring
+Service (<https://healthmeasures.net/implement/scoring/calculate-scores/>)
+through the `tscore_table` argument (see `?p2e_tscores`), or supply T-score
+columns directly. The item-level sets S1 and S2 need no table.
+
+## Trademarks
+
+EQ-5D™ is a trade mark of the EuroQol Research Foundation.
+
+PROMIS® is a registered trademark of the U.S. Department of Health and Human Services. This package is not affiliated with or endorsed by HHS, the PROMIS Health Organization, HealthMeasures or the EuroQol Research Foundation.

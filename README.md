@@ -31,6 +31,11 @@ predict_eq5d(my_data, country = "Japan", mode = "individual", draws = 200, seed 
 * `mode = "individual"`: `draws` draws per row, for individual-level uncertainty.
 * `mode = "cohort"`: for each draw, the mean utility of each group (`group = ...`), with draws aligned across groups and time points for QALY calculations.
 
+## Vignettes
+
+* Getting started with promis2eq5d: `vignette("promis2eq5d")`, a worked example of the columns, the three modes and other countries.
+* Methods: `vignette("methods", package = "promis2eq5d")`, the models, the crosswalk and refit, the draw corrections and the conformal intervals.
+
 ## Large downloads (R09)
 
 The R09_chain response method has large fits that are not part of the package. The fits are downloaded per predictor set: `p2e_download("R09_chain", "S3")` downloads one set, and `set = "all"` downloads all four. Download them once. The function asks before downloading in an interactive session, and in a non-interactive session needs `options(promis2eq5d.allow_download = TRUE)`. Files are checked against a published checksum and installed in a user cache folder. The files are archived on Zenodo (<https://doi.org/10.5281/zenodo.24199380>).
