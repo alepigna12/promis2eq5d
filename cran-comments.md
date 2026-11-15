@@ -3,20 +3,31 @@ This is a new submission.
 ## Test environments
 
 * Local: Windows 11 x64, R 4.5.2 (2025-10-31 ucrt), x86_64-w64-mingw32.
+* win-builder: R-devel (2026-11-14 r90890 ucrt), Windows Server 2022 x64,
+  x86_64-w64-mingw32.
 
 ## R CMD check results
 
-`R CMD check --as-cran` on the built tarball, run with `NOT_CRAN` unset and
-`_R_CHECK_CRAN_INCOMING_REMOTE_=false` (no other `_R_CHECK_*` variables set,
-so `_R_CHECK_FORCE_SUGGESTS_` has its default): Status OK, 0 errors |
-0 warnings | 0 notes. The "New submission" NOTE was not observed locally; it
-comes from the incoming checks that CRAN runs, which could not be run here.
-The tests gave 1352 passed expectations and 26 skips.
+0 errors | 0 warnings | 1 note
 
-The same check with `_R_CHECK_DEPENDS_ONLY_=true` (recommended packages such
-as MASS and Matrix stay available) and the same two settings gives Status OK,
-0 errors | 0 warnings | 0 notes. Tests that need a Suggests package are
-skipped when it is absent (168 skips in that run).
+* win-builder R-devel: Status 1 NOTE, from the CRAN incoming feasibility
+  check:
+
+  * "New submission".
+  * "Possibly misspelled words in DESCRIPTION: Klapproth, et, al". These
+    are the surname of an author and the abbreviation "et al." in the
+    references of the Description; they are spelled correctly.
+
+* Local, `R CMD check --as-cran` on the built tarball, run with `NOT_CRAN`
+  unset and `_R_CHECK_CRAN_INCOMING_REMOTE_=false` (the remote incoming
+  checks could not be run here; no other `_R_CHECK_*` variables set, so
+  `_R_CHECK_FORCE_SUGGESTS_` has its default): Status OK, 0 errors |
+  0 warnings | 0 notes. The tests gave 1352 passed expectations and 26 skips.
+
+* Local, the same check with `_R_CHECK_DEPENDS_ONLY_=true` (recommended
+  packages such as MASS and Matrix stay available): Status OK, 0 errors |
+  0 warnings | 0 notes. Tests that need a Suggests package are skipped when
+  it is absent (168 skips in that run).
 
 The installed size is about 3.8 MB (the package ships the fits of three
 methods for France, Germany and the UK, and the training data); the source
