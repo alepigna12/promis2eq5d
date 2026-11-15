@@ -45,6 +45,15 @@
 #'   converged` and `summary` carries the counts as the attributes
 #'   `boot_attempted` and `boot_failed`.
 #' @seealso [predict_eq5d()]
+#' @examples
+#' trial <- subset(p2e_example_trial, month == 0)[1:2, ]
+#' res <- predict_eq5d(trial, "UK")
+#' summary(res)
+#'
+#' ind <- predict_eq5d(trial, "UK", mode = "individual", draws = 20, seed = 1)
+#' print(ind)
+#' summary(ind)
+#' dim(as.matrix(ind))
 #' @name p2e_result
 NULL
 
@@ -109,6 +118,9 @@ summary.p2e_result <- function(object, level = 0.90, ...) {
     out$upper <- unname(apply(u, 1, stats::quantile, 1 - a))
     rownames(out) <- NULL
     return(.with_boot_counts(out, info))
+  }
+  if (!missing(level)) {
+    warning("level is not used for cohort summaries, which use 95% intervals; it is ignored.", call. = FALSE)
   }
   ix <- .cohort_index(df, cols$group)
   a <- (1 - COHORT_LEVEL) / 2

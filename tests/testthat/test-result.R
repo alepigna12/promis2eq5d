@@ -48,6 +48,12 @@ test_that("summary: individual mode", {
   expect_equal(s$upper, unname(apply(u, 1, stats::quantile, 0.9)))
 })
 
+test_that("summary: level is ignored with a warning in cohort mode", {
+  r <- quiet(predict_eq5d(res_data(), "UK", mode = "cohort", group = "arm", draws = 10, seed = 1))
+  expect_warning(s <- summary(r, level = 0.8), "level is not used for cohort summaries")
+  expect_equal(s, summary(r), ignore_attr = TRUE)
+})
+
 test_that("summary: cohort mode uses the 95% level", {
   r <- quiet(predict_eq5d(res_data(), "UK", mode = "cohort", group = "arm", draws = 30, seed = 1))
   s <- summary(r)

@@ -4,14 +4,18 @@ URL: https://github.com/alepigna12/promis2eq5d
 BugReports: https://github.com/alepigna12/promis2eq5d/issues
 Version: 0.1.0
 Authors@R: c(
-    person("Alessio", "Pignatelli", email = "apignat1@jh.edu", role = c("aut", "cre"),
+    person("Alessio", "Pignatelli", email = "apignat1@jh.edu", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0009-0005-5728-0001")),
-    person("Davide", "Boccaccio", role = "aut",
+    person("Davide", "Boccaccio", role = c("aut", "cph"),
            comment = c(ORCID = "0009-0003-5654-5907")))
 Description: Predicts 'EQ-5D-5L' utilities and dimension responses from 'PROMIS-29'
     health survey profiles for any country value set in the 'eq5d' package.
     Supports mean, individual-draw and cohort-draw prediction modes. The
     models are trained on the data of Fischer (2021) <doi:10.7910/DVN/FNYYQR>.
+    Direct methods include censored least absolute deviations (Powell (1984)
+    <doi:10.1016/0304-4076(84)90004-6>) and the specification of Klapproth et
+    al. (2020) <doi:10.1186/s12955-020-01629-0>; prediction intervals follow
+    the CV+ method of Barber et al. (2021) <doi:10.1214/20-AOS1965>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true

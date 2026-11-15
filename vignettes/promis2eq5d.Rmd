@@ -173,7 +173,9 @@ T-scores; for item-only data such as the example trial it uses S1, so download
 that set instead.
 
 ```{r, eval = FALSE}
-p2e_download("R09_chain", "S3")
+# S1 suits item-only data such as the example trial; S3 is the set for
+# data with T-scores
+p2e_download("R09_chain", "S1")
 predict_eq5d(my_data, country = "UK", method = "R09_chain")
 ```
 

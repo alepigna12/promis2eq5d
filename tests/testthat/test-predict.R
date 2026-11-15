@@ -151,6 +151,7 @@ test_that("as_published warns exactly once per call", {
 })
 
 test_that("result attributes record the call", {
+  for (tg in c("FR", "DE", "UK")) stand_in_bundle("D03_clad", "S3", tg)   # skips without quantreg/glmnet; B = 4 below
   nd <- user_frame(make_synthetic_data(5, 2))
   r <- quiet(predict_eq5d(nd, "USA", family = "direct", mode = "individual", draws = 4, seed = 5))
   i <- attr(r, "p2e_info")
@@ -254,6 +255,13 @@ test_that("dimensions in cohort mode warns", {
   nd <- user_frame(make_synthetic_data(5, 2))
   expect_warning(quiet(predict_eq5d(nd, "UK", mode = "cohort", dimensions = TRUE, draws = 3)),
                  "dimensions is only used")
+})
+
+test_that("dimensions in cohort mode does not then error for a direct method", {
+  nd <- user_frame(make_synthetic_data(5, 2))
+  expect_warning(r <- quiet(predict_eq5d(nd, "UK", family = "direct", mode = "cohort",
+                                         dimensions = TRUE, draws = 3)), "dimensions is only used")
+  expect_s3_class(r, "p2e_result")
 })
 
 test_that("unused crosswalk_from warns", {

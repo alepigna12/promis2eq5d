@@ -35,6 +35,16 @@ In the draw modes \code{print} shows \verb{bootstrap fits: <converged> of <attem
 \description{
 Methods for the result of \code{\link[=predict_eq5d]{predict_eq5d()}}.
 }
+\examples{
+trial <- subset(p2e_example_trial, month == 0)[1:2, ]
+res <- predict_eq5d(trial, "UK")
+summary(res)
+
+ind <- predict_eq5d(trial, "UK", mode = "individual", draws = 20, seed = 1)
+print(ind)
+summary(ind)
+dim(as.matrix(ind))
+}
 \seealso{
 \code{\link[=predict_eq5d]{predict_eq5d()}}
 }

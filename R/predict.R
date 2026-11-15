@@ -149,12 +149,10 @@ SET_DESCRIPTIONS <- c(
 #'   `boot_failed`.
 #' @seealso [p2e_columns()], [p2e_value_set()], [p2e_tscores()]
 #' @examples
-#' \donttest{
 #' pro <- data.frame(age = 54, female = 1, Global07 = 4)
 #' pro[unname(subset(p2e_columns(), type == "item")$column)] <- 2L
 #' predict_eq5d(pro, "UK")
 #' predict_eq5d(pro, "Japan", mode = "individual", draws = 200, seed = 1)
-#' }
 #' @export
 predict_eq5d <- function(data, country, family = NULL, method = NULL,
                          mode = c("mean", "individual", "cohort"), group = NULL,
@@ -189,6 +187,7 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
   }
   if (dimensions && mode == "cohort") {
     warning("dimensions is only used in mean and individual mode; it is ignored.", call. = FALSE)
+    dimensions <- FALSE
   }
   if (!is.null(group) && mode != "cohort") {
     warning("group is only used in cohort mode; it is ignored.", call. = FALSE)
@@ -288,9 +287,13 @@ predict_eq5d <- function(data, country, family = NULL, method = NULL,
 # tibble); no tibble or dplyr dependency.
 .plain_frame <- function(data) {
   if (!is.data.frame(data)) stop("`data` must be a data frame.", call. = FALSE)
-  dup <- unique(names(data)[duplicated(names(data))])
+  nm <- names(data)
+  if (anyNA(nm) || any(nm == "")) {
+    stop("`data` has empty or missing column names.", call. = FALSE)
+  }
+  dup <- unique(nm[duplicated(nm)])
   if (length(dup)) {
-    stop("`data` has duplicate column names: ", paste(dup, collapse = ", "), ".", call. = FALSE)
+    stop("`data` has duplicate column names: ", paste0("'", dup, "'", collapse = ", "), ".", call. = FALSE)
   }
   cols <- unclass(data)
   nr <- nrow(data)

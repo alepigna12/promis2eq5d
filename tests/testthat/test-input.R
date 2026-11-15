@@ -82,5 +82,12 @@ test_that("columns table, age warning and aliases", {
 
 test_that("duplicate column names are an error", {
   d <- data.frame(PFA11 = 3, PFA11 = 4, age = 50, check.names = FALSE)
-  expect_error(.plain_frame(d), "duplicate column names: PFA11")
+  expect_error(.plain_frame(d), "duplicate column names: 'PFA11'")
+})
+
+test_that("empty or missing column names are an error", {
+  d <- data.frame(a = 1, b = 2); names(d)[1:2] <- c("", "")
+  expect_error(.plain_frame(d), "empty or missing column names")
+  names(d) <- c("a", NA)
+  expect_error(.plain_frame(d), "empty or missing column names")
 })

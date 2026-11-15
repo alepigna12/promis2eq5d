@@ -38,7 +38,7 @@ toy_method <- function(fail_on = NULL, uses_oof = FALSE, K = 3, bad_call = NULL,
 }
 
 # TRUE under the CRAN setting (NOT_CRAN not "true"), as testthat::skip_on_cran() sees it
-on_cran <- function() !isTRUE(as.logical(Sys.getenv("NOT_CRAN", "false")))
+on_cran <- function() !interactive() && !isTRUE(as.logical(Sys.getenv("NOT_CRAN", "false")))
 
 .stand_in_env <- new.env()
 
@@ -53,6 +53,8 @@ R09_TEST_VARIANT <- list(eta = 0.3, max_depth = 2, subsample = 1, colsample_bytr
 stand_in_bundle <- function(method, set, target = NA) {
   # the R06 stand-ins take 1 to 2 minutes each to fit: CRAN runs use the shipped R06 fits
   if (method == "R06_mvop_dim") testthat::skip_on_cran()
+  # Suggests packages the method needs to FIT (CRAN noSuggests runs have none of them)
+  for (p in .p2e_method(method)$needs) testthat::skip_if_not_installed(p)
   key <- paste(method, set, if (is.na(target)) "any" else target, sep = "_")
   if (is.null(.stand_in_env$dir)) {
     .stand_in_env$dir <- tempfile("p2e-fits-")
@@ -70,11 +72,18 @@ stand_in_bundle <- function(method, set, target = NA) {
   .stand_in_env[[key]]
 }
 
-# Makes sure the stand-in bundles that predict_eq5d() tests need exist.
+# Makes sure the stand-in bundles that predict_eq5d() tests need exist. Called
+# at file top level, so it never skips: it builds only the stand-ins whose
+# packages are installed. A test that needs a missing stand-in skips itself via
+# stand_in_bundle().
 use_stand_in_fits <- function() {
-  if (!on_cran()) for (s in c("S1", "S2", "S3")) stand_in_bundle("R06_mvop_dim", s)
-  stand_in_bundle("R09_chain", "S3")
-  for (s in c("S3", "S1")) for (tg in c("FR", "DE", "UK")) stand_in_bundle("D03_clad", s, tg)
+  if (!requireNamespace("MASS", quietly = TRUE)) return(invisible(FALSE))
+  can_fit <- function(method) {
+    all(vapply(.p2e_method(method)$needs, requireNamespace, NA, quietly = TRUE))
+  }
+  if (!on_cran() && can_fit("R06_mvop_dim")) for (s in c("S1", "S2", "S3")) stand_in_bundle("R06_mvop_dim", s)
+  if (can_fit("R09_chain")) stand_in_bundle("R09_chain", "S3")
+  if (can_fit("D03_clad")) for (s in c("S3", "S1")) for (tg in c("FR", "DE", "UK")) stand_in_bundle("D03_clad", s, tg)
   for (tg in c("FR", "DE", "UK")) stand_in_bundle("D12_klapproth", "S3K", tg)
   invisible(TRUE)
 }

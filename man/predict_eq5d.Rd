@@ -206,12 +206,10 @@ PROMIS\Sexpr[results=rd]{"\\\\enc{\u00ae}{(R)}"} is a registered trademark of th
 }
 
 \examples{
-\donttest{
 pro <- data.frame(age = 54, female = 1, Global07 = 4)
 pro[unname(subset(p2e_columns(), type == "item")$column)] <- 2L
 predict_eq5d(pro, "UK")
 predict_eq5d(pro, "Japan", mode = "individual", draws = 200, seed = 1)
-}
 }
 \seealso{
 \code{\link[=p2e_columns]{p2e_columns()}}, \code{\link[=p2e_value_set]{p2e_value_set()}}, \code{\link[=p2e_tscores]{p2e_tscores()}}
