@@ -8,7 +8,7 @@ This is a new submission.
 
 `R CMD check --as-cran` on the built tarball: 0 errors | 0 warnings | 0 notes
 locally (with the remote CRAN incoming check disabled; the "New submission"
-NOTE is expected from the incoming check). The same check with
+NOTE appears only in the remote incoming check, which I could not run locally). The same check with
 `_R_CHECK_DEPENDS_ONLY_=true` and `_R_CHECK_NO_RECOMMENDED_=true` gives
 0 errors | 0 warnings | 0 notes; tests that need a Suggests package are
 skipped when it is absent.
