@@ -131,7 +131,10 @@ test_that("uses_oof bundles store one pool and rebuild each replicate's pool", {
 test_that("pools are rebuilt under the user's RNG kind", {
   b <- .fit_bundle(toy_method(uses_oof = TRUE), make_synthetic_data(200, 1), "S4", "UK", list(), 3, 2, 7)
   ref <- .boot_pool(b, b$boot[[2]])
-  withr::with_rng_version("3.5.0", expect_equal(.boot_pool(b, b$boot[[2]]), ref))
+  # R 3.5's "Rounding" sampler, set without RNGversion(): on R > 4.6 RNGversion() also
+  # selects the old rbinom() kind, which withr::with_rng_version() does not restore
+  withr::with_seed(1, .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+                   .rng_sample_kind = "Rounding", expect_equal(.boot_pool(b, b$boot[[2]]), ref))
   withr::with_seed(1, .rng_kind = "L'Ecuyer-CMRG", expect_equal(.boot_pool(b, b$boot[[2]]), ref))
 })
 test_that("a pool that cannot be rebuilt is an error", {
